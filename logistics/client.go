@@ -18,7 +18,8 @@ type Client struct {
 	Login, Password string
 	Token           string
 
-	Auth *AuthService
+	Auth    *AuthService
+	Reports *ReportService
 
 	httpClient *httpclient.Client
 	common     service // Reuse a single struct instead of allocating one for each service on the heap.
@@ -57,6 +58,7 @@ func NewClient(cfg ClintConf) (*Client, error) {
 
 	c.common.client = c
 	c.Auth = (*AuthService)(&c.common)
+	c.Reports = (*ReportService)(&c.common)
 
 	return c, nil
 }

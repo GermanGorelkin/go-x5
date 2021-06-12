@@ -41,16 +41,16 @@ type ResponseCreateReport struct {
 	Code        string
 	Description string
 	Result      struct {
-		ReportID []string `json:"reportId"`
+		ReportID string `json:"reportId"`
 	}
 }
 
 // Create create report for the given RequestCreateReport and return list of reportId
-func (srv *ReportService) Create(req RequestCreateReport) ([]string, error) {
+func (srv *ReportService) Create(req RequestCreateReport) (string, error) {
 	var res ResponseCreateReport
 	err := srv.client.httpClient.Post(URL_REPORT_CREATE, req, &res)
 	if err != nil || res.Code != "ok" {
-		return nil, fmt.Errorf("failed to create report:%w", err)
+		return res.Result.ReportID, fmt.Errorf("failed to create report:%w", err)
 	}
 
 	return res.Result.ReportID, nil
