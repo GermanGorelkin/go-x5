@@ -9,10 +9,14 @@ import (
 )
 
 type Client struct {
-	Instance   string
-	httpClient *httpclient.Client
+	Instance        string
+	Login, Password string
+	Token           string
 
-	common service // Reuse a single struct instead of allocating one for each service on the heap.
+	Auth *AuthService
+
+	httpClient *httpclient.Client
+	common     service // Reuse a single struct instead of allocating one for each service on the heap.
 }
 
 type service struct {
@@ -20,8 +24,9 @@ type service struct {
 }
 
 type ClintConf struct {
-	Instance string
-	Verbose  bool
+	Instance        string
+	Login, Password string
+	Verbose         bool
 }
 
 func NewClient(cfg ClintConf) (*Client, error) {
@@ -40,8 +45,13 @@ func NewClient(cfg ClintConf) (*Client, error) {
 
 	c := &Client{
 		Instance:   cfg.Instance,
+		Login:      cfg.Login,
+		Password:   cfg.Password,
 		httpClient: cl,
 	}
+
+	c.common.client = c
+	c.Auth = (*AuthService)(&c.common)
 
 	return c, nil
 }
