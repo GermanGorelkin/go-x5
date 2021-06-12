@@ -16,7 +16,7 @@ func TestAuthService_Auth_OK(t *testing.T) {
 	password := "pass"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/logistics/auth", r.URL.Path)
+		assert.Equal(t, URL_AUTH, r.URL.Path)
 
 		b, err := ioutil.ReadAll(r.Body)
 		assert.NoError(t, err)
@@ -52,7 +52,7 @@ func TestAuthService_Auth_400(t *testing.T) {
 	password := "pass"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/logistics/auth", r.URL.Path)
+		assert.Equal(t, URL_AUTH, r.URL.Path)
 
 		b, err := ioutil.ReadAll(r.Body)
 		assert.NoError(t, err)

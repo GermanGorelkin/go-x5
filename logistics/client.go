@@ -8,6 +8,11 @@ import (
 	httpclient "github.com/germangorelkin/http-client"
 )
 
+const (
+	URL_REPORT_CREATE = "/v1/logistics/report"
+	URL_AUTH          = "/v1/logistics/auth"
+)
+
 type Client struct {
 	Instance        string
 	Login, Password string

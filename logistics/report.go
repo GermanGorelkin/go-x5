@@ -47,10 +47,8 @@ type ResponseCreateReport struct {
 
 // Create create report for the given RequestCreateReport and return list of reportId
 func (srv *ReportService) Create(req RequestCreateReport) ([]string, error) {
-	url := "/v1/logistics/report"
-
 	var res ResponseCreateReport
-	err := srv.client.httpClient.Post(url, req, &res)
+	err := srv.client.httpClient.Post(URL_REPORT_CREATE, req, &res)
 	if err != nil || res.Code != "ok" {
 		return nil, fmt.Errorf("failed to create report:%w", err)
 	}

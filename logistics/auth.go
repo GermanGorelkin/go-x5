@@ -18,14 +18,13 @@ type ResponseAuth struct {
 
 // Auth gets token for the given login and password
 func (srv *AuthService) Auth(login, password string) (string, error) {
-	url := "/v1/logistics/auth"
 	// TODO validation
 	req := RequestAuth{
 		Login:    login,
 		Password: password,
 	}
 	var res ResponseAuth
-	err := srv.client.httpClient.Post(url, req, &res)
+	err := srv.client.httpClient.Post(URL_AUTH, req, &res)
 	if err != nil || res.Code != "ok" {
 		return "", fmt.Errorf("failed to auth:%w", err)
 	}
