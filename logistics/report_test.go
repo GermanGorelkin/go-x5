@@ -1,6 +1,7 @@
 package logistics
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -115,4 +116,29 @@ func Test_ReportService_Status_BUILD(t *testing.T) {
 	res, err := client.Reports.Status(requestId)
 	assert.NoError(t, err)
 	assert.Equal(t, BUILD, res.Result.ReportStatus)
+}
+
+func Test_ReportService_Download(t *testing.T) {
+	partId := "d8eeb73b-80bc-4210-bf04-2ba3eb8f49887535676002360153464.csv"
+	data := "DAY|PLANT|PLU|TURNOVER\n2021-06-09|1004|2070689|1.0000\n2021-06-09|1004|3357698|1.0000"
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, fmt.Sprintf(URL_REPORT_DOWNLOAD, partId), r.URL.Path)
+
+		w.Header().Add("Content-Type", "application/octet-stream")
+		w.Header().Add("Content-Disposition", "attachment;filename=d8eeb73b-80bc-4210-bf04-2ba3eb8f49887535676002360153464.csv")
+		_, err := fmt.Fprintln(w, data)
+		assert.NoError(t, err)
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ClintConf{
+		Instance: ts.URL,
+	})
+	assert.NoError(t, err)
+
+	buf := bytes.NewBuffer([]byte{})
+	err = client.Reports.Download(partId, buf)
+	assert.NoError(t, err)
+	assert.Equal(t, data+"\n", buf.String())
 }

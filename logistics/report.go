@@ -1,6 +1,9 @@
 package logistics
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+)
 
 type SalesChannel string
 type TypeReport string
@@ -75,4 +78,13 @@ func (srv *ReportService) Status(requestId string) (ResponseStatusReport, error)
 		return res, fmt.Errorf("failed to get report's status:%w", err)
 	}
 	return res, nil
+}
+
+// Download copies report's data to Writer for the given partId
+func (srv *ReportService) Download(partId string, w io.Writer) error {
+	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_DOWNLOAD, partId), w)
+	if err != nil {
+		return fmt.Errorf("failed to download report:%w", err)
+	}
+	return nil
 }
