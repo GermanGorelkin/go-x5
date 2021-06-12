@@ -45,7 +45,7 @@ type ResponseCreateReport struct {
 	}
 }
 
-// Create create report for the given RequestCreateReport and return list of reportId
+// Create create report for the given RequestCreateReport and return reportId
 func (srv *ReportService) Create(req RequestCreateReport) (string, error) {
 	var res ResponseCreateReport
 	err := srv.client.httpClient.Post(URL_REPORT_CREATE, req, &res)
@@ -54,4 +54,25 @@ func (srv *ReportService) Create(req RequestCreateReport) (string, error) {
 	}
 
 	return res.Result.ReportID, nil
+}
+
+type ResponseStatusReport struct {
+	Code        string
+	Description string
+	Result      struct {
+		ReportID     string       `json:"reportId"`
+		Description  string       `json:"description"`
+		ReportStatus ReportStatus `json:"reportStatus"`
+		PartIds      []string     `json:"partIds"`
+	}
+}
+
+// Status gets report's status for the given requestId
+func (srv *ReportService) Status(requestId string) (ResponseStatusReport, error) {
+	var res ResponseStatusReport
+	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_STATUS, requestId), &res)
+	if err != nil || res.Code != "ok" {
+		return res, fmt.Errorf("failed to get report's status:%w", err)
+	}
+	return res, nil
 }

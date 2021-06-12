@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	URL_REPORT_STATUS = "/v1/logistics/report/%s/status"
 	URL_REPORT_CREATE = "/v1/logistics/report"
 	URL_AUTH          = "/v1/logistics/auth"
 )
