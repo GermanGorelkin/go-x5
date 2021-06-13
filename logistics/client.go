@@ -64,3 +64,7 @@ func NewClient(cfg ClintConf) (*Client, error) {
 
 	return c, nil
 }
+
+func (c *Client) SetToken(token string) {
+	c.httpClient.SetAuthorization(token)
+}
