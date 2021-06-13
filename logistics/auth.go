@@ -5,14 +5,15 @@ import "fmt"
 type AuthService service
 
 type RequestAuth struct {
-	Login, Password string
+	Login    string `json:"login"`
+	Password string `json:"password"`
 }
 
 type ResponseAuth struct {
-	Code        string
-	Description string
+	Code        string `json:"code"`
+	Description string `json:"description"`
 	Result      struct {
-		Token string
+		Token string `json:"token"`
 	}
 }
 

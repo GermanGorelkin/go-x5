@@ -22,7 +22,7 @@ const (
 	PRODUCT_DIRECTORY TypeReport = "PRODUCT_DIRECTORY" // Все каналы
 	SHOP_DIRECTORY    TypeReport = "SHOP_DIRECTORY"    // Все каналы
 
-	CREATED              ReportStatus = "ReportStatus"         //создан запрос
+	CREATED              ReportStatus = "CREATED"              //создан запрос
 	BUILD                ReportStatus = "BUILD"                // отчет в генерации
 	DONE                 ReportStatus = "DONE"                 // отчет подготовлен
 	ERROR                ReportStatus = "ERROR"                // ошибка при создании отчета
@@ -41,8 +41,8 @@ type RequestCreateReport struct {
 	IsArchive    bool         `json:"isArchive"`
 }
 type ResponseCreateReport struct {
-	Code        string
-	Description string
+	Code        string `json:"code"`
+	Description string `json:"description"`
 	Result      struct {
 		ReportID string `json:"reportId"`
 	}
@@ -60,8 +60,8 @@ func (srv *ReportService) Create(req RequestCreateReport) (string, error) {
 }
 
 type ResponseStatusReport struct {
-	Code        string
-	Description string
+	Code        string `json:"code"`
+	Description string `json:"description"`
 	Result      struct {
 		ReportID     string       `json:"reportId"`
 		Description  string       `json:"description"`
@@ -84,7 +84,7 @@ func (srv *ReportService) Status(requestId string) (ResponseStatusReport, error)
 func (srv *ReportService) Download(partId string, w io.Writer) error {
 	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_DOWNLOAD, partId), w)
 	if err != nil {
-		return fmt.Errorf("failed to download report:%w", err)
+		return fmt.Errorf("failed to download:%w", err)
 	}
 	return nil
 }
