@@ -48,7 +48,7 @@ func main() {
 	var resStatus logistics.ResponseStatusReport
 
 	for attempts := cfg.waiteReportStatusAttempt; attempts >= 0; attempts-- {
-		log.Printf("wait %d sec report status", cfg.waiteReportStatusDelaySec)
+		log.Printf("wait %dsec report status", cfg.waiteReportStatusDelaySec)
 		time.Sleep(delay)
 
 		resStatus, err = cli.Reports.Status(reportId)
@@ -59,7 +59,7 @@ func main() {
 			resStatus.Result.ReportStatus == logistics.ERROR {
 			break
 		}
-		log.Printf("attempt %d, status:#%+v", attempts, resStatus)
+		log.Printf("attempt %d in %d; status:#%+v", cfg.waiteReportStatusAttempt-attempts+1, cfg.waiteReportStatusAttempt, resStatus)
 	}
 
 	if resStatus.Result.ReportStatus != logistics.DONE {
