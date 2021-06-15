@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -10,38 +11,30 @@ import (
 )
 
 func main() {
-	instance := os.Getenv("INSTANCE")
-	login := os.Getenv("LOGIN")
-	password := os.Getenv("PASSWORD")
-	verbose, _ := strconv.ParseBool(os.Getenv("VERBOSE"))
-	salesChannel := logistics.SalesChannel(os.Getenv("SALES_CHANNEL"))
-	typeReport := logistics.TypeReport(os.Getenv("TYPE_REPORT"))
-	startDate := os.Getenv("START_DATE")
-	finishDAte := os.Getenv("FINISH_DATE")
+	cfg := config()
 
 	cli, err := logistics.NewClient(logistics.ClintConf{
-		Instance: instance,
-		Verbose:  verbose,
+		Instance: cfg.instance,
+		Verbose:  cfg.verbose,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("build new client")
 
-	token, err := cli.Auth.Auth(login, password)
+	token, err := cli.Auth.Auth(cfg.login, cfg.password)
 	if err != nil {
 		log.Fatal(err)
 	}
 	cli.SetToken(token)
 	log.Printf("get new token:%s", token)
 
-	// StartDate:    time.Now().UTC().Add(-1 * 24 * time.Hour).Truncate(24 * time.Hour).Format(time.RFC3339),
-	// FinishDate:   time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339),
 	reqCR := logistics.RequestCreateReport{
-		StartDate:    startDate,
-		FinishDate:   finishDAte,
-		SalesChannel: salesChannel,
-		TypeReport:   typeReport,
+		StartDate:    cfg.startDate,
+		FinishDate:   cfg.finishDAte,
+		SalesChannel: cfg.salesChannel,
+		TypeReport:   cfg.typeReport,
+		IsArchive:    cfg.isArchive,
 	}
 	log.Printf("request of create report:%+v", reqCR)
 
@@ -51,10 +44,11 @@ func main() {
 	}
 	log.Printf("new report created:%s", reportId)
 
-	delay := 5 * time.Second
+	delay := time.Duration(cfg.waiteReportStatusDelaySec) * time.Second
 	var resStatus logistics.ResponseStatusReport
 
-	for attempts := 10; attempts >= 0; attempts-- {
+	for attempts := cfg.waiteReportStatusAttempt; attempts >= 0; attempts-- {
+		log.Printf("wait %d sec report status", cfg.waiteReportStatusDelaySec)
 		time.Sleep(delay)
 
 		resStatus, err = cli.Reports.Status(reportId)
@@ -74,7 +68,8 @@ func main() {
 	log.Printf("status:#%+v", resStatus)
 
 	for _, partIds := range resStatus.Result.PartIds {
-		f, err := os.Create(partIds)
+		path := filepath.Join(cfg.outDir, partIds)
+		f, err := os.Create(path)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -85,4 +80,68 @@ func main() {
 
 		log.Printf("download %s", partIds)
 	}
+}
+
+func config() mainConfig {
+	var cfg mainConfig
+
+	cfg.instance = os.Getenv("INSTANCE")
+	cfg.login = os.Getenv("LOGIN")
+	cfg.password = os.Getenv("PASSWORD")
+	cfg.verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+	cfg.salesChannel = logistics.SalesChannel(os.Getenv("SALES_CHANNEL"))
+	cfg.typeReport = logistics.TypeReport(os.Getenv("TYPE_REPORT"))
+	cfg.startDate = os.Getenv("START_DATE")
+	cfg.finishDAte = os.Getenv("FINISH_DATE")
+	cfg.isArchive, _ = strconv.ParseBool(os.Getenv("ARCHIVE"))
+	cfg.outDir = os.Getenv("OUT_DIR")
+	waiteReportStatusDelaySec := os.Getenv("WAITE_REPORT_STATUS_DELAY_SEC")
+	waiteReportStatusAttempt := os.Getenv("WAITE_REPORT_STATUS_ATTEMPT")
+
+	if waiteReportStatusDelaySec == "" {
+		waiteReportStatusDelaySec = "10"
+	}
+	n, err := strconv.Atoi(waiteReportStatusDelaySec)
+	if err != nil {
+		log.Fatalf("failed to parse WAITE_REPORT_STATUS_DELAY_SEC=%s", waiteReportStatusDelaySec)
+	}
+	cfg.waiteReportStatusDelaySec = n
+
+	if waiteReportStatusAttempt == "" {
+		waiteReportStatusAttempt = "10"
+	}
+	n, err = strconv.Atoi(waiteReportStatusAttempt)
+	if err != nil {
+		log.Fatalf("failed to parse WAITE_REPORT_STATUS_ATTEMPT=%s", waiteReportStatusAttempt)
+	}
+	cfg.waiteReportStatusAttempt = n
+
+	if cfg.outDir == "" {
+		cfg.outDir = "reports"
+	}
+	if err := os.MkdirAll(cfg.outDir, os.ModePerm); err != nil {
+		log.Fatalf("failed to create out dir %s:%v", cfg.outDir, err)
+	}
+
+	if cfg.startDate == "" || cfg.finishDAte == "" {
+		cfg.finishDAte = time.Now().UTC().Add(-4 * 24 * time.Hour).Truncate(24 * time.Hour).Format(time.RFC3339)
+		cfg.startDate = time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
+	}
+
+	return cfg
+}
+
+type mainConfig struct {
+	instance                  string
+	login                     string
+	password                  string
+	verbose                   bool
+	salesChannel              logistics.SalesChannel
+	typeReport                logistics.TypeReport
+	startDate                 string // Если не заполнять поле то по умолчанию указывается текущая дата.
+	finishDAte                string // Если не заполнять поле то по умолчанию указывается текущая дата -4 день.
+	outDir                    string //  Если не заполнять поле то по умолчанию указывается report
+	waiteReportStatusDelaySec int    //  Если не заполнять поле то по умолчанию указывается 10 sec
+	waiteReportStatusAttempt  int    //  Если не заполнять поле то по умолчанию указывается 10
+	isArchive                 bool
 }
