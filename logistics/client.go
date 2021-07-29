@@ -2,8 +2,6 @@ package logistics
 
 import (
 	"fmt"
-	"net/http"
-	"time"
 
 	httpclient "github.com/germangorelkin/http-client"
 )
@@ -40,7 +38,8 @@ type ClintConf struct {
 func NewClient(cfg ClintConf) (*Client, error) {
 	cl, err := httpclient.New(
 		// TODO timeout
-		&http.Client{Timeout: 30 * time.Second},
+		// &http.Client{Timeout: 30 * time.Second},
+		nil,
 		httpclient.WithBaseURL(cfg.Instance))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build http-client:%w", err)
