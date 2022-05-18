@@ -5,7 +5,7 @@ import "fmt"
 type AuthService service
 
 type RequestAuth struct {
-	Login    string `json:"login"`
+	Login    string `json:"email"`
 	Password string `json:"password"`
 }
 

@@ -65,5 +65,5 @@ func NewClient(cfg ClintConf) (*Client, error) {
 }
 
 func (c *Client) SetToken(token string) {
-	c.httpClient.SetAuthorization(token)
+	c.httpClient.SetAuthorization(fmt.Sprintf("%s %s", "Bearer", token))
 }
