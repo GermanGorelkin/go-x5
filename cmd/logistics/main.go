@@ -15,19 +15,22 @@ func main() {
 
 	cli, err := logistics.NewClient(logistics.ClintConf{
 		Instance: cfg.instance,
+		Login:    cfg.login,
+		Password: cfg.password,
 		Verbose:  cfg.verbose,
+		AutoAuth: cfg.autoAuth,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("build new client")
 
-	token, err := cli.Auth.Auth(cfg.login, cfg.password)
-	if err != nil {
-		log.Fatal(err)
-	}
-	cli.SetToken(token)
-	log.Printf("get new token:%s", token)
+	// token, err := cli.Auth.Auth(cfg.login, cfg.password)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// cli.SetToken(token)
+	// log.Printf("get new token:%s", token)
 
 	reqCR := logistics.RequestCreateReport{
 		StartDate:    cfg.startDate,
@@ -89,6 +92,7 @@ func config() mainConfig {
 	cfg.login = os.Getenv("LOGIN")
 	cfg.password = os.Getenv("PASSWORD")
 	cfg.verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+	cfg.autoAuth, _ = strconv.ParseBool(os.Getenv("AUTO_AUTH"))
 	cfg.salesChannel = logistics.SalesChannel(os.Getenv("SALES_CHANNEL"))
 	cfg.typeReport = logistics.TypeReport(os.Getenv("TYPE_REPORT"))
 	cfg.startDate = os.Getenv("START_DATE")
@@ -136,6 +140,7 @@ type mainConfig struct {
 	login                     string
 	password                  string
 	verbose                   bool
+	autoAuth                  bool
 	salesChannel              logistics.SalesChannel
 	typeReport                logistics.TypeReport
 	startDate                 string // Если не заполнять поле то по умолчанию указывается текущая дата.
