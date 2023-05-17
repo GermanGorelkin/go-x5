@@ -142,10 +142,10 @@ func (srv *ParametersService) GetTreeProducts() (ResultTreeProducts, error) {
 // ResultDelivery
 type ResultDelivery struct {
 	Types []struct {
-		Deliverytypeid   string `json:"deliveryTypeId"`
-		Deliverytypename string `json:"deliveryTypeName"`
+		DeliveryTypeID   string `json:"deliveryTypeId"`
+		DeliveryTypeName string `json:"deliveryTypeName"`
 		Icon             string `json:"icon"`
-		Datestart        string `json:"dateStart"`
+		DateStart        string `json:"dateStart"`
 	} `json:"types"`
 }
 

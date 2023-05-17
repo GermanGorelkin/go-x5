@@ -15,6 +15,8 @@ const (
 	URL_METRICS              = "%s/api/v1/public/dictionaries/report-types/trends/metrics"    // {{api_url}}/api/v1/public/dictionaries/report-types/trends/metrics
 	URL_GRANULARITIES        = "%s/api/v1/public/dictionaries/periods?reportTypeId=%s"        // {{api_url}}/api/v1/public/dictionaries/periods?reportTypeId={{reportTypeId}}
 
+	URL_CREATE_TRENDS = "%s/api/v1/public/reports/trends" // {{api_url}}/api/v1/public/reports/trends
+
 	URL_KC_TOKEN       = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token"                     // {{api_url}}/api/v1/public/auth/token
 )
@@ -27,7 +29,7 @@ type Client struct {
 
 	Auth       *AuthService
 	Parameters *ParametersService
-	//Reports *ReportService
+	Reports    *ReportService
 
 	httpClient *httpclient.Client
 	common     service // Reuse a single struct instead of allocating one for each service on the heap.
@@ -68,7 +70,7 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	c.common.client = c
 	c.Auth = (*AuthService)(&c.common)
 	c.Parameters = (*ParametersService)(&c.common)
-	//c.Reports = (*ReportService)(&c.common)
+	c.Reports = (*ReportService)(&c.common)
 
 	return c, nil
 }
