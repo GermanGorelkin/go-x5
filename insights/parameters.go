@@ -9,7 +9,7 @@ const (
 type ParametersService service
 
 type ParametersResult interface {
-	ResultSections | ResultAvailableDates | ResultTreeStores
+	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts
 }
 type ParametersResponse[T ParametersResult] struct {
 	Code   string `json:"code"`
@@ -94,6 +94,45 @@ func (srv *ParametersService) GetTreeStores() (ResultTreeStores, error) {
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
 		return res.Result, fmt.Errorf("failed to get tree stores: %v", err)
+	}
+	return res.Result, nil
+}
+
+//----------------------------------------------------------------------------------------------
+// Дерево-классификатор товаров
+
+// ResultTreeProducts
+type ResultTreeProducts struct {
+	Nodes []struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Level    string `json:"level"`
+		Children []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Level    string `json:"level"`
+			Children []struct {
+				ID       string `json:"id"`
+				Name     string `json:"name"`
+				Level    string `json:"level"`
+				Children []struct {
+					ID       string        `json:"id"`
+					Name     string        `json:"name"`
+					Level    string        `json:"level"`
+					Children []interface{} `json:"children"`
+				} `json:"children"`
+			} `json:"children"`
+		} `json:"children"`
+	} `json:"nodes"`
+}
+
+// GetTreeProducts gets the tree products for REPORT_TYPE_ID
+func (srv *ParametersService) GetTreeProducts() (ResultTreeProducts, error) {
+	url := fmt.Sprintf(URL_TREE_PRODUCTS, srv.client.API_URL, REPORT_TYPE_ID)
+	var res ParametersResponse[ResultTreeProducts]
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res.Result, fmt.Errorf("failed to get tree products: %v", err)
 	}
 	return res.Result, nil
 }
