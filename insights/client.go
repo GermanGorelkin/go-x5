@@ -38,7 +38,6 @@ type ClintConf struct {
 	ClientID, Login, Password string
 	API_URL                   string
 	Verbose                   bool
-	AutoAuth                  bool
 }
 
 func NewClient(cfg ClintConf) (*Client, error) {
@@ -62,10 +61,6 @@ func NewClient(cfg ClintConf) (*Client, error) {
 		httpClient: cl,
 	}
 
-	// if cfg.AutoAuth {
-	// 	c.httpClient.AddInterceptor(c.AuthInterceptor)
-	// }
-
 	c.common.client = c
 	c.Auth = (*AuthService)(&c.common)
 	//c.Reports = (*ReportService)(&c.common)
@@ -73,67 +68,26 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	return c, nil
 }
 
+// SetToken sets the client's token
 func (c *Client) SetToken(access, refresh, jwt string) {
 	cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
 	c.httpClient.SetHeader("cookie", cookie)
 	c.httpClient.SetHeader("x5-api-key", jwt)
 }
 
-/*
-func (c *Client) auth() error {
-	log.Printf("%s", "get auth token...")
-	token, err := c.Auth.Auth(c.Login, c.Password)
+// Authorization full authorizations in the system
+func (c *Client) Authorization() error {
+	access, refresh, err := c.Auth.GetKeyCloakTokens(c.ClientID, c.Login, c.Password)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get keycloak tokens:%w", err)
 	}
-	c.SetToken(token)
-	log.Printf("new token:%s", token)
+
+	jwt, err := c.Auth.GetInternalToken(access, refresh)
+	if err != nil {
+		return fmt.Errorf("failed to get internal token:%w", err)
+	}
+
+	c.SetToken(string(access), string(refresh), string(jwt))
+
 	return nil
 }
-
-func (c *Client) isUnauthorized(r *http.Response) bool {
-	if r.StatusCode == 401 {
-		return true
-	}
-
-	body, _ := ioutil.ReadAll(r.Body)
-	r.ContentLength = int64(len(body))
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
-	if bytes.Contains(body, []byte("Ошибка получения доступа для указанного токена")) {
-		log.Printf("Unauthorized:%s", body)
-		return true
-	}
-
-	return false
-}
-
-func (c *Client) AuthInterceptor(req *http.Request, handler httpclient.Handler) (resp *http.Response, err error) {
-	if req.Header.Get("Authorization") == "" && req.URL.Path != URL_AUTH {
-		if err = c.auth(); err != nil {
-			return nil, err
-		}
-		req.Header.Set("Authorization", c.Token)
-	}
-
-	attempt := 2 // TODO
-	for i := 0; i < attempt; i++ {
-		resp, err = handler(req)
-
-		if ok := c.isUnauthorized(resp); !ok {
-			break
-		}
-
-		if err != nil {
-			log.Printf("%v", err)
-		}
-
-		if err = c.auth(); err != nil {
-			return resp, err
-		}
-		req.Header.Set("Authorization", c.Token)
-	}
-
-	return resp, err
-}
-*/
