@@ -9,7 +9,7 @@ const (
 type ParametersService service
 
 type ParametersResult interface {
-	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts
+	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts | ResultDelivery
 }
 type ParametersResponse[T ParametersResult] struct {
 	Code   string `json:"code"`
@@ -133,6 +133,29 @@ func (srv *ParametersService) GetTreeProducts() (ResultTreeProducts, error) {
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
 		return res.Result, fmt.Errorf("failed to get tree products: %v", err)
+	}
+	return res.Result, nil
+}
+
+// Список доставок
+
+// ResultDelivery
+type ResultDelivery struct {
+	Types []struct {
+		Deliverytypeid   string `json:"deliveryTypeId"`
+		Deliverytypename string `json:"deliveryTypeName"`
+		Icon             string `json:"icon"`
+		Datestart        string `json:"dateStart"`
+	} `json:"types"`
+}
+
+// GetDelivery gets the list of delivery
+func (srv *ParametersService) GetDelivery() (ResultDelivery, error) {
+	url := fmt.Sprintf(URL_DELIVERY, srv.client.API_URL)
+	var res ParametersResponse[ResultDelivery]
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res.Result, fmt.Errorf("failed to get delivery: %v", err)
 	}
 	return res.Result, nil
 }
