@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	URL_BUILD_SECTIONS = "%s/api/v1/public/dictionaries/report-types/%s/build-sections" // {{api_url}}/api/v1/public/dictionaries/report-types/{{reportTypeId}}/build-sections
+	URL_BUILD_SECTIONS       = "%s/api/v1/public/dictionaries/report-types/%s/build-sections" // {{api_url}}/api/v1/public/dictionaries/report-types/{{reportTypeId}}/build-sections
+	URL_BUILD_AVAILABLE_DATE = "%s/api/v1/public/dictionaries/availableDates?reportTypeId=%s" // {{api_url}}/api/v1/public/dictionaries/availableDates?reportTypeId={{reportTypeId}}
 
 	URL_KC_TOKEN       = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token"                     // {{api_url}}/api/v1/public/auth/token

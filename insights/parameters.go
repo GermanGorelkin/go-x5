@@ -32,3 +32,25 @@ func (srv *ParametersService) GetSections() (ResponseSections, error) {
 	}
 	return res, nil
 }
+
+// AvailableDates
+
+// ResponseAvailableDates
+type ResponseAvailableDates struct {
+	Code   string `json:"code"`
+	Result struct {
+		Mindt string `json:"minDt"`
+		Maxdt string `json:"maxDt"`
+	} `json:"result"`
+}
+
+// GetAvailableDates returns all available dates for REPORT_TYPE_ID
+func (srv *ParametersService) GetAvailableDates() (ResponseAvailableDates, error) {
+	url := fmt.Sprintf(URL_BUILD_AVAILABLE_DATE, srv.client.API_URL, REPORT_TYPE_ID)
+	var res ResponseAvailableDates
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res, fmt.Errorf("failed to get available dates: %v", err)
+	}
+	return res, nil
+}
