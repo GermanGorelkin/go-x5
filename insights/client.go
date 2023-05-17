@@ -12,6 +12,7 @@ const (
 	URL_TREE_STORES          = "%s/api/v1/public/tree/stores?reportTypeId=%s"                 // {{api_url}}/api/v1/public/tree/stores?reportTypeId={{reportTypeId}}
 	URL_TREE_PRODUCTS        = "%s/api/v1/public/tree/products?reportTypeId=%s"               // {{api_url}}/api/v1/public/tree/products?reportTypeId={{reportTypeId}}
 	URL_DELIVERY             = "%s/api/v1/public/dictionaries/delivery"                       // {{api_url}}/api/v1/public/dictionaries/delivery
+	URL_METRICS              = "%s/api/v1/public/dictionaries/report-types/trends/metrics"    // {{api_url}}/api/v1/public/dictionaries/report-types/trends/metrics
 
 	URL_KC_TOKEN       = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token"                     // {{api_url}}/api/v1/public/auth/token

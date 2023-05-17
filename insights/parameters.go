@@ -9,7 +9,7 @@ const (
 type ParametersService service
 
 type ParametersResult interface {
-	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts | ResultDelivery
+	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts | ResultDelivery | ResultMetrics
 }
 type ParametersResponse[T ParametersResult] struct {
 	Code   string `json:"code"`
@@ -156,6 +156,27 @@ func (srv *ParametersService) GetDelivery() (ResultDelivery, error) {
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
 		return res.Result, fmt.Errorf("failed to get delivery: %v", err)
+	}
+	return res.Result, nil
+}
+
+// Список метрик
+
+// ResultMetrics
+type ResultMetrics struct {
+	Metricgroups []struct {
+		Code    string   `json:"code"`
+		Metrics []string `json:"metrics"`
+	} `json:"metricGroups"`
+}
+
+// GetMetrics gets the list of metrics
+func (srv *ParametersService) GetMetrics() (ResultMetrics, error) {
+	url := fmt.Sprintf(URL_METRICS, srv.client.API_URL)
+	var res ParametersResponse[ResultMetrics]
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res.Result, fmt.Errorf("failed to get metrics: %v", err)
 	}
 	return res.Result, nil
 }
