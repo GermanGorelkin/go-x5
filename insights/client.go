@@ -7,10 +7,7 @@ import (
 )
 
 const (
-	URL_REPORT_DOWNLOAD = "/v1/logistics/report/%s/download"
-	URL_REPORT_STATUS   = "/v1/logistics/report/%s/status"
-	URL_REPORT_CREATE   = "/v1/logistics/report"
-	URL_AUTH            = "/v1/logistics/auth"
+	URL_BUILD_SECTIONS = "%s/api/v1/public/dictionaries/report-types/%s/build-sections" // {{api_url}}/api/v1/public/dictionaries/report-types/{{reportTypeId}}/build-sections
 
 	URL_KC_TOKEN       = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token"                     // {{api_url}}/api/v1/public/auth/token
@@ -22,7 +19,8 @@ type Client struct {
 
 	API_URL string
 
-	Auth *AuthService
+	Auth       *AuthService
+	Parameters *ParametersService
 	//Reports *ReportService
 
 	httpClient *httpclient.Client
@@ -63,6 +61,7 @@ func NewClient(cfg ClintConf) (*Client, error) {
 
 	c.common.client = c
 	c.Auth = (*AuthService)(&c.common)
+	c.Parameters = (*ParametersService)(&c.common)
 	//c.Reports = (*ReportService)(&c.common)
 
 	return c, nil
