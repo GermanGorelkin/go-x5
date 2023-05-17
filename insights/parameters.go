@@ -8,90 +8,92 @@ const (
 
 type ParametersService service
 
+type ParametersResult interface {
+	ResultSections | ResultAvailableDates | ResultTreeStores
+}
+type ParametersResponse[T ParametersResult] struct {
+	Code   string `json:"code"`
+	Result T      `json:"result"`
+}
+
+//----------------------------------------------------------------------------------------------
 // Список блоков для отчета
 
-// ResponseSections
-type ResponseSections struct {
-	Code   string `json:"code"`
-	Result struct {
-		Reportsections []struct {
-			ID           string `json:"id"`
-			Reporttypeid string `json:"reportTypeId"`
-			Name         string `json:"name"`
-		} `json:"reportSections"`
-	} `json:"result"`
+// ResultSections
+type ResultSections struct {
+	Reportsections []struct {
+		ID           string `json:"id"`
+		Reporttypeid string `json:"reportTypeId"`
+		Name         string `json:"name"`
+	} `json:"reportSections"`
 }
 
 // GetSections returns all report sections for REPORT_TYPE_ID
-func (srv *ParametersService) GetSections() (ResponseSections, error) {
+func (srv *ParametersService) GetSections() (ResultSections, error) {
 	url := fmt.Sprintf(URL_BUILD_SECTIONS, srv.client.API_URL, REPORT_TYPE_ID)
-	var res ResponseSections
+	var res ParametersResponse[ResultSections]
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
-		return res, fmt.Errorf("failed to get sections: %v", err)
+		return res.Result, fmt.Errorf("failed to get sections: %v", err)
 	}
-	return res, nil
+	return res.Result, nil
 }
 
+//----------------------------------------------------------------------------------------------
 // Доступные даты для построения отчета
 
-// ResponseAvailableDates
-type ResponseAvailableDates struct {
-	Code   string `json:"code"`
-	Result struct {
-		Mindt string `json:"minDt"`
-		Maxdt string `json:"maxDt"`
-	} `json:"result"`
+// ResultAvailableDates
+type ResultAvailableDates struct {
+	Mindt string `json:"minDt"`
+	Maxdt string `json:"maxDt"`
 }
 
 // GetAvailableDates returns all available dates for REPORT_TYPE_ID
-func (srv *ParametersService) GetAvailableDates() (ResponseAvailableDates, error) {
+func (srv *ParametersService) GetAvailableDates() (ResultAvailableDates, error) {
 	url := fmt.Sprintf(URL_BUILD_AVAILABLE_DATE, srv.client.API_URL, REPORT_TYPE_ID)
-	var res ResponseAvailableDates
+	var res ParametersResponse[ResultAvailableDates]
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
-		return res, fmt.Errorf("failed to get available dates: %v", err)
+		return res.Result, fmt.Errorf("failed to get available dates: %v", err)
 	}
-	return res, nil
+	return res.Result, nil
 }
 
+//----------------------------------------------------------------------------------------------
 // Дерево-классификатор магазинов
 
-// ResponseTreeStores
-type ResponseTreeStores struct {
-	Code   string `json:"code"`
-	Result struct {
-		Totalstores   int `json:"totalStores"`
-		Tradenetworks []struct {
-			ID               string `json:"id"`
-			Name             string `json:"name"`
-			Storescount      int    `json:"storesCount"`
-			Federaldistricts []struct {
-				ID          int    `json:"id"`
+// ResultTreeStores
+type ResultTreeStores struct {
+	Totalstores   int `json:"totalStores"`
+	Tradenetworks []struct {
+		ID               string `json:"id"`
+		Name             string `json:"name"`
+		Storescount      int    `json:"storesCount"`
+		Federaldistricts []struct {
+			ID          int    `json:"id"`
+			Name        string `json:"name"`
+			Storescount int    `json:"storesCount"`
+			Regions     []struct {
+				ID          string `json:"id"`
 				Name        string `json:"name"`
 				Storescount int    `json:"storesCount"`
-				Regions     []struct {
+				Cities      []struct {
 					ID          string `json:"id"`
 					Name        string `json:"name"`
 					Storescount int    `json:"storesCount"`
-					Cities      []struct {
-						ID          string `json:"id"`
-						Name        string `json:"name"`
-						Storescount int    `json:"storesCount"`
-					} `json:"cities"`
-				} `json:"regions"`
-			} `json:"federalDistricts"`
-		} `json:"tradeNetworks"`
-	} `json:"result"`
+				} `json:"cities"`
+			} `json:"regions"`
+		} `json:"federalDistricts"`
+	} `json:"tradeNetworks"`
 }
 
 // GetTreeStores gets the tree stores for REPORT_TYPE_ID
-func (srv *ParametersService) GetTreeStores() (ResponseTreeStores, error) {
+func (srv *ParametersService) GetTreeStores() (ResultTreeStores, error) {
 	url := fmt.Sprintf(URL_TREE_STORES, srv.client.API_URL, REPORT_TYPE_ID)
-	var res ResponseTreeStores
+	var res ParametersResponse[ResultTreeStores]
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
-		return res, fmt.Errorf("failed to get tree stores: %v", err)
+		return res.Result, fmt.Errorf("failed to get tree stores: %v", err)
 	}
-	return res, nil
+	return res.Result, nil
 }
