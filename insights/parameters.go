@@ -8,7 +8,7 @@ const (
 
 type ParametersService service
 
-// Sections
+// Список блоков для отчета
 
 // ResponseSections
 type ResponseSections struct {
@@ -33,7 +33,7 @@ func (srv *ParametersService) GetSections() (ResponseSections, error) {
 	return res, nil
 }
 
-// AvailableDates
+// Доступные даты для построения отчета
 
 // ResponseAvailableDates
 type ResponseAvailableDates struct {
@@ -51,6 +51,47 @@ func (srv *ParametersService) GetAvailableDates() (ResponseAvailableDates, error
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
 		return res, fmt.Errorf("failed to get available dates: %v", err)
+	}
+	return res, nil
+}
+
+// Дерево-классификатор магазинов
+
+// ResponseTreeStores
+type ResponseTreeStores struct {
+	Code   string `json:"code"`
+	Result struct {
+		Totalstores   int `json:"totalStores"`
+		Tradenetworks []struct {
+			ID               string `json:"id"`
+			Name             string `json:"name"`
+			Storescount      int    `json:"storesCount"`
+			Federaldistricts []struct {
+				ID          int    `json:"id"`
+				Name        string `json:"name"`
+				Storescount int    `json:"storesCount"`
+				Regions     []struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					Storescount int    `json:"storesCount"`
+					Cities      []struct {
+						ID          string `json:"id"`
+						Name        string `json:"name"`
+						Storescount int    `json:"storesCount"`
+					} `json:"cities"`
+				} `json:"regions"`
+			} `json:"federalDistricts"`
+		} `json:"tradeNetworks"`
+	} `json:"result"`
+}
+
+// GetTreeStores gets the tree stores for REPORT_TYPE_ID
+func (srv *ParametersService) GetTreeStores() (ResponseTreeStores, error) {
+	url := fmt.Sprintf(URL_TREE_STORES, srv.client.API_URL, REPORT_TYPE_ID)
+	var res ResponseTreeStores
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res, fmt.Errorf("failed to get tree stores: %v", err)
 	}
 	return res, nil
 }
