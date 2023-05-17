@@ -9,7 +9,7 @@ const (
 type ParametersService service
 
 type ParametersResult interface {
-	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts | ResultDelivery | ResultMetrics
+	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts | ResultDelivery | ResultMetrics | ResultGranularities
 }
 type ParametersResponse[T ParametersResult] struct {
 	Code   string `json:"code"`
@@ -177,6 +177,27 @@ func (srv *ParametersService) GetMetrics() (ResultMetrics, error) {
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
 		return res.Result, fmt.Errorf("failed to get metrics: %v", err)
+	}
+	return res.Result, nil
+}
+
+// Granularities
+
+// ResultGranularities
+type ResultGranularities struct {
+	Granularities []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"granularities"`
+}
+
+// GetGranularities gets the list of granularities
+func (srv *ParametersService) GetGranularities() (ResultGranularities, error) {
+	url := fmt.Sprintf(URL_GRANULARITIES, srv.client.API_URL, REPORT_TYPE_ID)
+	var res ParametersResponse[ResultGranularities]
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res.Result, fmt.Errorf("failed to get granularities: %v", err)
 	}
 	return res.Result, nil
 }
