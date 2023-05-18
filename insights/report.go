@@ -2,13 +2,14 @@ package insights
 
 import (
 	"fmt"
+	"io"
 	"time"
 )
 
 type ReportService service
 
 type ReportResult interface {
-	ResultTrendsAnalysis
+	ResultTrendsAnalysis | ResultReportStatus
 }
 
 type ReportResponse[T ReportResult] struct {
@@ -229,4 +230,48 @@ func (srv *ReportService) CreateTrends(request RequestTrendsAnalysis) (ResultTre
 		return res.Result, fmt.Errorf("failed to create trends: %v", err)
 	}
 	return res.Result, nil
+}
+
+// ----------------------------------------------------------------------------------------------
+
+/*
+CREATED- Создан, готовится к генерации
+FAILED - Ошибка
+ENQUEUED - В очереди
+PROCESSING - Формируется
+EXPORT_FILE_GENERATION_STARTED - Начата генерация файла для выгрузки
+EXPORT_FILE_GENERATED - Выгрузка готова к скачиванию
+*/
+
+type ResultReportStatus struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	Deleted      bool   `json:"deleted"`
+	CreatedAt    string `json:"createdAt"`
+	CreatedBy    string `json:"createdBy"`
+	AccountID    string `json:"accountId"`
+	ParametersID string `json:"parametersId"`
+	ExportFileID string `json:"exportFileId"`
+}
+
+func (srv *ReportService) GetReportStatus(reportID string) (ResultReportStatus, error) {
+	url := fmt.Sprintf(URL_REPORT_STATUS, srv.client.API_URL, reportID)
+	var res ReportResponse[ResultReportStatus]
+	err := srv.client.httpClient.Get(url, &res)
+	if err != nil || res.Code != "ok" {
+		return res.Result, fmt.Errorf("failed to get report status: %v", err)
+	}
+	return res.Result, nil
+}
+
+// ----------------------------------------------------------------------------------------------
+
+func (srv *ReportService) Download(exportFileID string, w io.Writer) error {
+	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_EXPORT, srv.client.API_URL, exportFileID), w)
+	if err != nil {
+		return fmt.Errorf("failed to download:%w", err)
+	}
+	return nil
 }

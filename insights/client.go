@@ -16,6 +16,8 @@ const (
 	URL_GRANULARITIES        = "%s/api/v1/public/dictionaries/periods?reportTypeId=%s"        // {{api_url}}/api/v1/public/dictionaries/periods?reportTypeId={{reportTypeId}}
 
 	URL_CREATE_TRENDS = "%s/api/v1/public/reports/trends" // {{api_url}}/api/v1/public/reports/trends
+	URL_REPORT_STATUS = "%s/api/v2/public/reports/%s"     // {{api_url}}/api/v2/public/reports/{{reportId}}
+	URL_REPORT_EXPORT = "%s/api/v1/public/export/%s"      // {{api_url}}/api/v1/public/export/{{exportFileId}}
 
 	URL_KC_TOKEN       = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token"                     // {{api_url}}/api/v1/public/auth/token
