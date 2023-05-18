@@ -1,6 +1,9 @@
 package insights
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type ReportService service
 
@@ -97,6 +100,111 @@ type RequestTrendsAnalysis struct {
 		MetricGroups  []string      `json:"metricGroups"` // code from ResultMetricGroups
 	} `json:"parameters"`
 	Export bool `json:"export"` // true
+}
+
+type PeriodMode int
+
+const (
+	PeriodMode_Month PeriodMode = iota + 1
+	PeriodMode_Week
+)
+
+type DeliveryMode int
+
+const (
+	DeliveryMode_EXCLUDE DeliveryMode = iota + 1
+	DeliveryMode_CHOOSE_ONLY_DELIVERY
+)
+
+type TrendsAnalysisOptions struct {
+	Params       ReportParameters
+	PeriodMode   PeriodMode
+	DeliveryMode DeliveryMode
+	BeginDate    time.Time
+	EndDate      time.Time
+}
+
+func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions) (RequestTrendsAnalysis, error) {
+	var reqReport RequestTrendsAnalysis
+
+	reqReport.Name = uniqueReportName()
+	reqReport.Type = REPORT_TYPE_ID
+	reqReport.SectionIDs = opts.Params.SectionIDs()
+
+	for _, id := range opts.Params.ProductIDs() {
+		reqReport.Parameters.Products.Selection = append(reqReport.Parameters.Products.Selection, ProductSection{
+			ID: id,
+		})
+	}
+	reqReport.Parameters.Products.IsCategoryPluDetailing = true
+
+	var networks []NetworkElementlist
+	for _, id := range opts.Params.TradeNetworkIDs() {
+		nel := NetworkElementlist{
+			TradeNetworkID:   id,
+			SelectedFully:    true,
+			FederalDistricts: []FederalDistrict{},
+		}
+		networks = append(networks, nel)
+	}
+
+	var delivery Delivery
+	if opts.DeliveryMode == DeliveryMode_EXCLUDE {
+		delivery = Delivery{
+			DeliveryMode: "EXCLUDE",
+			Types:        []string{},
+		}
+	} else {
+		delivery = Delivery{
+			DeliveryMode: "CHOOSE_ONLY_DELIVERY",
+			Types:        opts.Params.DeliveryIDs(),
+		}
+	}
+
+	reqReport.Parameters.SelectedShops = SelectedShops{
+		GroupingAttributes: []string{"TOTAL", "TRADE_NETWORK", "CITY"},
+		GrowthMeasure:      "TOTAL",
+		NetworkElementlist: networks,
+		Delivery:           delivery,
+	}
+
+	reqReport.Parameters.Customers = Customer{
+		CustomerType: "TOTAL",
+	}
+
+	var granularityId string
+	if opts.PeriodMode == PeriodMode_Month {
+		// "При выборе гранулярности 'Месяц' продолжительность периода должна быть больше или равна 28 дням"
+		granularityId = opts.Params.GranularityID("Месяц")
+	} else if opts.PeriodMode == PeriodMode_Week {
+		granularityId = opts.Params.GranularityID("Неделя")
+	}
+
+	_, maxDR, err := opts.Params.AvailableDates()
+	if err != nil {
+		return reqReport, fmt.Errorf("failed to get available dates: %w", err)
+	}
+	if opts.EndDate.After(maxDR) {
+		opts.EndDate = maxDR
+	}
+
+	reqReport.Parameters.Periods = Periods{
+		PeriodGranularityId: granularityId,
+		Period: Period{
+			Start: opts.BeginDate.Format("2006-01-02"),
+			Stop:  opts.EndDate.Format("2006-01-02"),
+		},
+	}
+
+	reqReport.Parameters.MetricGroups = opts.Params.MetricIDs()
+
+	reqReport.Export = true
+
+	return reqReport, nil
+}
+
+func uniqueReportName() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
 // ResultTrendsAnalysis - response body for TrendsAnalysis

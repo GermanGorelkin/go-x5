@@ -104,6 +104,15 @@ func (rp ReportParameters) MetricIDs() []string {
 	return ids
 }
 
+func (rp ReportParameters) GranularityID(name string) string {
+	for _, granularity := range rp.ResultGranularities.Granularities {
+		if granularity.Name == name {
+			return granularity.ID
+		}
+	}
+	return ""
+}
+
 //----------------------------------------------------------------------------------------------
 // Список блоков для отчета
 
