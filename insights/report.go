@@ -128,7 +128,7 @@ type TrendsAnalysisOptions struct {
 func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions) (RequestTrendsAnalysis, error) {
 	var reqReport RequestTrendsAnalysis
 
-	reqReport.Name = uniqueReportName()
+	reqReport.Name = uniqueReportName(opts)
 	reqReport.Type = REPORT_TYPE_ID
 	reqReport.SectionIDs = opts.Params.SectionIDs()
 
@@ -204,8 +204,25 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	return reqReport, nil
 }
 
-func uniqueReportName() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+func uniqueReportName(opts TrendsAnalysisOptions) string {
+	var deliveryMode string
+	if opts.DeliveryMode == DeliveryMode_EXCLUDE {
+		deliveryMode = "EXCLUDE"
+	} else {
+		deliveryMode = "CHOOSE_ONLY_DELIVERY"
+	}
+
+	var periodMode string
+	if opts.PeriodMode == PeriodMode_Month {
+		periodMode = "MONTH"
+	} else if opts.PeriodMode == PeriodMode_Week {
+		periodMode = "WEEK"
+	}
+
+	beginDate := opts.BeginDate.Format("20060102")
+	endDate := opts.EndDate.Format("20060102")
+
+	return fmt.Sprintf("%s-%s-%s-%s-%d", periodMode, deliveryMode, beginDate, endDate, time.Now().UnixNano())
 }
 
 // ResultTrendsAnalysis - response body for TrendsAnalysis
