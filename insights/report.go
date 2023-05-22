@@ -77,8 +77,9 @@ type Customer struct {
 }
 
 type Periods struct {
-	PeriodGranularityId string `json:"periodGranularityId"` // id from ResultPeriodGranularity
-	Period              Period `json:"period"`
+	PeriodGranularityId   string `json:"periodGranularityId"` // id from ResultPeriodGranularity
+	PeriodGranularityName string `json:"periodGranularityName"`
+	Period                Period `json:"period"`
 }
 
 type Period struct {
@@ -173,13 +174,17 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 		CustomerType: "TOTAL",
 	}
 
-	var granularityId string
+	var (
+		granularityId   string
+		granularityName string
+	)
 	if opts.PeriodMode == PeriodMode_Month {
 		// "При выборе гранулярности 'Месяц' продолжительность периода должна быть больше или равна 28 дням"
-		granularityId = opts.Params.GranularityID("Месяц")
+		granularityName = "Месяц"
 	} else if opts.PeriodMode == PeriodMode_Week {
-		granularityId = opts.Params.GranularityID("Неделя")
+		granularityName = "Неделя"
 	}
+	granularityId = opts.Params.GranularityID(granularityName)
 
 	_, maxDR, err := opts.Params.AvailableDates()
 	if err != nil {
@@ -190,7 +195,8 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	}
 
 	reqReport.Parameters.Periods = Periods{
-		PeriodGranularityId: granularityId,
+		PeriodGranularityId:   granularityId,
+		PeriodGranularityName: granularityName,
 		Period: Period{
 			Start: opts.BeginDate.Format("2006-01-02"),
 			Stop:  opts.EndDate.Format("2006-01-02"),
