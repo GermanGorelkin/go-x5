@@ -116,6 +116,7 @@ type DeliveryMode int
 const (
 	DeliveryMode_EXCLUDE DeliveryMode = iota + 1
 	DeliveryMode_CHOOSE_ONLY_DELIVERY
+	DeliveryMode_INCLUDE_ALL
 )
 
 type TrendsAnalysisOptions struct {
@@ -154,6 +155,11 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	if opts.DeliveryMode == DeliveryMode_EXCLUDE {
 		delivery = Delivery{
 			DeliveryMode: "EXCLUDE",
+			Types:        []string{},
+		}
+	} else if opts.DeliveryMode == DeliveryMode_INCLUDE_ALL {
+		delivery = Delivery{
+			DeliveryMode: "INCLUDE_ALL",
 			Types:        []string{},
 		}
 	} else {
@@ -214,6 +220,8 @@ func uniqueReportName(opts TrendsAnalysisOptions) string {
 	var deliveryMode string
 	if opts.DeliveryMode == DeliveryMode_EXCLUDE {
 		deliveryMode = "EXCLUDE"
+	} else if opts.DeliveryMode == DeliveryMode_INCLUDE_ALL {
+		deliveryMode = "INCLUDE_ALL"
 	} else {
 		deliveryMode = "CHOOSE_ONLY_DELIVERY"
 	}
