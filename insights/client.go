@@ -14,6 +14,7 @@ const (
 	URL_DELIVERY             = "%s/api/v1/public/dictionaries/delivery"                       // {{api_url}}/api/v1/public/dictionaries/delivery
 	URL_METRICS              = "%s/api/v1/public/dictionaries/report-types/trends/metrics"    // {{api_url}}/api/v1/public/dictionaries/report-types/trends/metrics
 	URL_GRANULARITIES        = "%s/api/v1/public/dictionaries/periods?reportTypeId=%s"        // {{api_url}}/api/v1/public/dictionaries/periods?reportTypeId={{reportTypeId}}
+	URL_PRODUCTS_EXPORT      = "%s/api/v1/public/tree/products/download"                      // {{api_url}}/api/v1/public/tree/products/download
 
 	URL_CREATE_TRENDS = "%s/api/v1/public/reports/trends" // {{api_url}}/api/v1/public/reports/trends
 	URL_REPORT_STATUS = "%s/api/v2/public/reports/%s"     // {{api_url}}/api/v2/public/reports/{{reportId}}

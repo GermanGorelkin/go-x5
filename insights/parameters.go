@@ -2,6 +2,7 @@ package insights
 
 import (
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -77,16 +78,26 @@ func (rp ReportParameters) ProductIDs() []ProductSectionID {
 	return ids
 }
 
-// func getProductIDs(nodes TreeProductNodes) []ProductSectionID {
-// 	var ids []ProductSectionID
-// 	for _, node := range nodes.Children {
-// 		ids = append(ids, ProductSectionID{node.ID, node.Level})
-// 		if len(node.Children) > 0 {
-// 			ids = append(ids, getProductIDs(node)...)
-// 		}
-// 	}
-// 	return ids
-// }
+// ProductIDs gets ids of products all lvl
+func (rp ReportParameters) GetAllProductIDs() []ProductSectionID {
+	var ids []ProductSectionID
+	for _, node := range rp.ResultTreeProducts.Nodes {
+		ids = append(ids, ProductSectionID{node.ID, node.Level})
+		ids = append(ids, getProductIDs(node)...)
+	}
+	return ids
+}
+
+func getProductIDs(nodes TreeProductNodes) []ProductSectionID {
+	var ids []ProductSectionID
+	for _, node := range nodes.Children {
+		ids = append(ids, ProductSectionID{node.ID, node.Level})
+		if len(node.Children) > 0 {
+			ids = append(ids, getProductIDs(node)...)
+		}
+	}
+	return ids
+}
 
 func (rp ReportParameters) DeliveryIDs() []string {
 	var ids []string
@@ -284,4 +295,35 @@ func (srv *ParametersService) GetGranularities() (ResultGranularities, error) {
 		return res.Result, fmt.Errorf("failed to get granularities: %v", err)
 	}
 	return res.Result, nil
+}
+
+// Products
+
+type RequestProductsDownload struct {
+	Nodes         []RequestProductsDownloadNode `json:"nodes"`
+	GlobalCatalog bool                          `json:"global_catalog"`
+}
+
+type RequestProductsDownloadNode struct {
+	ID    string `json:"id"`
+	Level string `json:"level"`
+}
+
+func ConvertToRequestProductsDownloadNode(src []ProductSectionID) []RequestProductsDownloadNode {
+	result := make([]RequestProductsDownloadNode, len(src))
+	for i := range src {
+		result[i] = RequestProductsDownloadNode{
+			ID:    src[i].Code,
+			Level: src[i].Level,
+		}
+	}
+	return result
+}
+
+func (srv *ParametersService) ProductsDownload(rpd RequestProductsDownload, w io.Writer) error {
+	err := srv.client.httpClient.Post(fmt.Sprintf(URL_PRODUCTS_EXPORT, srv.client.API_URL), rpd, w)
+	if err != nil {
+		return fmt.Errorf("failed to download:%w", err)
+	}
+	return nil
 }
