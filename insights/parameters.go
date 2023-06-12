@@ -124,6 +124,56 @@ func (rp ReportParameters) GranularityID(name string) string {
 	return ""
 }
 
+//-----------------
+
+func (srv *ParametersService) FetchReportParameters() (ReportParameters, error) {
+	var parameters ReportParameters
+
+	sections, err := srv.GetSections()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetSections:%w", err)
+	}
+	parameters.ResultSections = sections
+
+	dates, err := srv.GetAvailableDates()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetAvailableDates:%w", err)
+	}
+	parameters.ResultAvailableDates = dates
+
+	stores, err := srv.GetTreeStores()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetTreeStores:%w", err)
+	}
+	parameters.ResultTreeStores = stores
+
+	products, err := srv.GetTreeProducts()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetTreeProducts:%w", err)
+	}
+	parameters.ResultTreeProducts = products
+
+	delivery, err := srv.GetDelivery()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetDelivery:%w", err)
+	}
+	parameters.ResultDelivery = delivery
+
+	granularities, err := srv.GetGranularities()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetGranularities:%w", err)
+	}
+	parameters.ResultGranularities = granularities
+
+	metrics, err := srv.GetMetrics()
+	if err != nil {
+		return parameters, fmt.Errorf("failed to GetMetrics:%w", err)
+	}
+	parameters.ResultMetrics = metrics
+
+	return parameters, nil
+}
+
 //----------------------------------------------------------------------------------------------
 // Список блоков для отчета
 
