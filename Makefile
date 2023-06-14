@@ -18,7 +18,7 @@ build:
 	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o $(BIN_DIR_DARWIN)/$(cmd) -v $(CMD_DIR)/main.go
 	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO_BUILD) -o $(BIN_DIR_WIN)/$(cmd).exe -v $(CMD_DIR)/main.go
 docker: build
-	docker build -f build/Dockerfile --build-arg "CMD=$(cmd)" -t ghcr.io/germangorelkin/go-x5-$(cmd):$(VERSION) --no-cache .
+	docker build -f build/Dockerfile --build-arg "CMD=$(cmd)" -t cr.yandex/crpoinjsjge915cq8ufl/go-x5-$(cmd):$(VERSION) --no-cache .
 clean:
 	rm -r bin/
 
