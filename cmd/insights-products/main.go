@@ -49,7 +49,7 @@ func main() {
 
 	rpd := insights.RequestProductsDownload{
 		Nodes:         insights.ConvertToRequestProductsDownloadNode(allProducts),
-		GlobalCatalog: true,
+		GlobalCatalog: false,
 	}
 	err = cl.Parameters.ProductsDownload(rpd, fp)
 	if err != nil {
