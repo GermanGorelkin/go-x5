@@ -42,6 +42,7 @@ func main() {
 	// --------- build requests
 
 	beginDate, endDate := getPeriod()
+	beginWeekDate := getMonday(beginDate)
 
 	requests := make([]insights.RequestTrendsAnalysis, 0, 4)
 
@@ -50,7 +51,7 @@ func main() {
 		Params:       parameters,
 		PeriodMode:   insights.PeriodMode_Week,
 		DeliveryMode: insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
-		BeginDate:    beginDate,
+		BeginDate:    beginWeekDate,
 		EndDate:      endDate,
 	}
 	req, err := cl.Reports.BuildRequestTrendsAnalysis(opts)
@@ -64,7 +65,7 @@ func main() {
 		Params:       parameters,
 		PeriodMode:   insights.PeriodMode_Week,
 		DeliveryMode: insights.DeliveryMode_EXCLUDE,
-		BeginDate:    beginDate,
+		BeginDate:    beginWeekDate,
 		EndDate:      endDate,
 	}
 	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
@@ -219,12 +220,21 @@ func config() mainConfig {
 	return cfg
 }
 
-// getPeriod get period form prev month to curr month
+// getPeriod gets period form prev month to curr month
 func getPeriod() (begin, end time.Time) {
 	now := time.Now().UTC()
 	firstOfMonth := now.AddDate(0, 0, -now.Day()+1) // day=1
 	prevMonth := firstOfMonth.AddDate(0, -1, 0)     // -1 month
 	return prevMonth, now
+}
+
+// getMonday gets Monday of the current week
+func getMonday(dt time.Time) time.Time {
+	mon := dt
+	for mon.Weekday() != time.Monday {
+		mon = mon.AddDate(0, 0, -1)
+	}
+	return mon
 }
 
 type mainConfig struct {
