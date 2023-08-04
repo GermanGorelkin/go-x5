@@ -130,7 +130,7 @@ func main() {
 
 		var status insights.ResultReportStatus
 		var delay time.Duration
-		for {
+		for attempts := 0; attempts < 10; attempts++ {
 			status, err = cl.Reports.GetReportStatus(res.ID)
 			if err != nil {
 				panic(err)
@@ -138,7 +138,7 @@ func main() {
 
 			log.Printf("status:%v", status)
 
-			if status.Status == "EXPORT_FILE_GENERATED" || status.Status == "FAILED" {
+			if status.Status == "SUCCEEDED" || status.Status == "FAILED" {
 				break
 			}
 
