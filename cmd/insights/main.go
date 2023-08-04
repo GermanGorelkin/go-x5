@@ -142,7 +142,7 @@ func main() {
 				break
 			}
 
-			delay += 1 * time.Minute
+			delay += 5 * time.Minute
 			log.Printf("wait %s", delay)
 			time.Sleep(delay)
 
