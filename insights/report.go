@@ -120,11 +120,14 @@ const (
 )
 
 type TrendsAnalysisOptions struct {
-	Params       ReportParameters
-	PeriodMode   PeriodMode
-	DeliveryMode DeliveryMode
-	BeginDate    time.Time
-	EndDate      time.Time
+	Params             ReportParameters
+	PeriodMode         PeriodMode
+	DeliveryMode       DeliveryMode
+	GroupingAttributes []string // SelectedShops.GroupingAttributes
+	BeginDate          time.Time
+	EndDate            time.Time
+
+	ReportType string // TRENDS_ANALYSIS_DATA|TRENDS_ANALYSIS_WD
 }
 
 func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions) (RequestTrendsAnalysis, error) {
@@ -169,8 +172,15 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 		}
 	}
 
+	var groupingAttributes []string
+	if len(opts.GroupingAttributes) > 0 {
+		groupingAttributes = append(groupingAttributes, opts.GroupingAttributes...)
+	} else {
+		groupingAttributes = []string{"TOTAL", "TRADE_NETWORK", "CITY"}
+	}
+
 	reqReport.Parameters.SelectedShops = SelectedShops{
-		GroupingAttributes: []string{"TOTAL", "TRADE_NETWORK", "CITY"},
+		GroupingAttributes: groupingAttributes,
 		GrowthMeasure:      "TOTAL",
 		NetworkElementlist: networks,
 		Delivery:           delivery,
@@ -236,7 +246,7 @@ func uniqueReportName(opts TrendsAnalysisOptions) string {
 	beginDate := opts.BeginDate.Format("20060102")
 	endDate := opts.EndDate.Format("20060102")
 
-	return fmt.Sprintf("%s-%s-%s-%s-%d", periodMode, deliveryMode, beginDate, endDate, time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s-%s-%s-%s-%d", opts.ReportType, periodMode, deliveryMode, beginDate, endDate, time.Now().UnixNano())
 }
 
 // ResultTrendsAnalysis - response body for TrendsAnalysis

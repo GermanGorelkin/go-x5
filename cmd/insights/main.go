@@ -46,13 +46,14 @@ func main() {
 
 	requests := make([]insights.RequestTrendsAnalysis, 0, 4)
 
-	// Week + CHOOSE_ONLY_DELIVERY
+	// TRENDS_ANALYSIS_DATA + Week + CHOOSE_ONLY_DELIVERY
 	opts := insights.TrendsAnalysisOptions{
 		Params:       parameters,
 		PeriodMode:   insights.PeriodMode_Week,
 		DeliveryMode: insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
 		BeginDate:    beginWeekDate,
 		EndDate:      endDate,
+		ReportType:   "TRENDS_ANALYSIS_DATA",
 	}
 	req, err := cl.Reports.BuildRequestTrendsAnalysis(opts)
 	if err != nil {
@@ -60,13 +61,14 @@ func main() {
 	}
 	requests = append(requests, req)
 
-	// Week + EXCLUDE
+	// TRENDS_ANALYSIS_DATA + Week + EXCLUDE
 	opts = insights.TrendsAnalysisOptions{
 		Params:       parameters,
 		PeriodMode:   insights.PeriodMode_Week,
 		DeliveryMode: insights.DeliveryMode_EXCLUDE,
 		BeginDate:    beginWeekDate,
 		EndDate:      endDate,
+		ReportType:   "TRENDS_ANALYSIS_DATA",
 	}
 	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
 	if err != nil {
@@ -74,13 +76,30 @@ func main() {
 	}
 	requests = append(requests, req)
 
-	// Month + CHOOSE_ONLY_DELIVERY
+	// TRENDS_ANALYSIS_WD + Week + INCLUDE_ALL
+	opts = insights.TrendsAnalysisOptions{
+		Params:             parameters,
+		PeriodMode:         insights.PeriodMode_Week,
+		DeliveryMode:       insights.DeliveryMode_INCLUDE_ALL,
+		BeginDate:          beginWeekDate,
+		EndDate:            endDate,
+		GroupingAttributes: []string{"TRADE_NETWORK"},
+		ReportType:         "TRENDS_ANALYSIS_WD",
+	}
+	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+	if err != nil {
+		panic(err)
+	}
+	requests = append(requests, req)
+
+	// TRENDS_ANALYSIS_DATA + Month + CHOOSE_ONLY_DELIVERY
 	opts = insights.TrendsAnalysisOptions{
 		Params:       parameters,
 		PeriodMode:   insights.PeriodMode_Month,
 		DeliveryMode: insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
 		BeginDate:    beginDate,
 		EndDate:      endDate,
+		ReportType:   "TRENDS_ANALYSIS_DATA",
 	}
 	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
 	if err != nil {
@@ -88,13 +107,30 @@ func main() {
 	}
 	requests = append(requests, req)
 
-	// Month + EXCLUDE
+	// TRENDS_ANALYSIS_DATA + Month + EXCLUDE
 	opts = insights.TrendsAnalysisOptions{
 		Params:       parameters,
 		PeriodMode:   insights.PeriodMode_Month,
 		DeliveryMode: insights.DeliveryMode_EXCLUDE,
 		BeginDate:    beginDate,
 		EndDate:      endDate,
+		ReportType:   "TRENDS_ANALYSIS_DATA",
+	}
+	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+	if err != nil {
+		panic(err)
+	}
+	requests = append(requests, req)
+
+	// TRENDS_ANALYSIS_WD + Month + INCLUDE_ALL
+	opts = insights.TrendsAnalysisOptions{
+		Params:             parameters,
+		PeriodMode:         insights.PeriodMode_Month,
+		DeliveryMode:       insights.DeliveryMode_INCLUDE_ALL,
+		BeginDate:          beginDate,
+		EndDate:            endDate,
+		GroupingAttributes: []string{"TRADE_NETWORK"},
+		ReportType:         "TRENDS_ANALYSIS_WD",
 	}
 	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
 	if err != nil {
