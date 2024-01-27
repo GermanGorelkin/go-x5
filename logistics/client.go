@@ -107,6 +107,7 @@ func (c *Client) isUnauthorized(r *http.Response) bool {
 }
 
 func (c *Client) AuthInterceptor(req *http.Request, handler httpclient.Handler) (resp *http.Response, err error) {
+	// если нет токена и запрос НЕ на его получения, тогда сначала запршиваем токен
 	if req.Header.Get("Authorization") == "" && req.URL.Path != URL_AUTH {
 		if err = c.auth(); err != nil {
 			return nil, err
@@ -118,14 +119,17 @@ func (c *Client) AuthInterceptor(req *http.Request, handler httpclient.Handler) 
 	for i := 0; i < attempt; i++ {
 		resp, err = handler(req)
 
+		// если ошибка НЕ в авторизации, тогда выходим
 		if ok := c.isUnauthorized(resp); !ok {
 			break
 		}
 
-		if err != nil {
-			log.Printf("%v", err)
+		// если ошибка в авторизации при запросе токена, тогда выходим
+		if req.URL.Path == URL_AUTH {
+			break
 		}
 
+		// если ошибка в авторизации(протух токен) тогда запрашиваем токен и повторяем попытку
 		if err = c.auth(); err != nil {
 			return resp, err
 		}
