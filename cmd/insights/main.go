@@ -40,11 +40,25 @@ func main() {
 	log.Println("fetch ReportParameters")
 
 	// --------- build requests
+	var beginDate, endDate time.Time
 
-	beginDate, endDate := getPeriod()
+	if cfg.StartDate != "" && cfg.FinishDate != "" {
+		beginDate, err = time.Parse("2006-01-02", cfg.StartDate)
+		if err != nil {
+			log.Printf("failed to parse %s:%v", cfg.StartDate, err)
+		}
+		endDate, err = time.Parse("2006-01-02", cfg.FinishDate)
+		if err != nil {
+			log.Printf("failed to parse %s:%v", cfg.FinishDate, err)
+		}
+	}
+	if beginDate.IsZero() || endDate.IsZero() {
+		beginDate, endDate = getPeriod()
+	}
+
 	beginWeekDate := getMonday(beginDate)
 
-	requests := make([]insights.RequestTrendsAnalysis, 0, 4)
+	requests := make([]insights.RequestTrendsAnalysis, 0, 6)
 
 	// TRENDS_ANALYSIS_DATA + Week + CHOOSE_ONLY_DELIVERY
 	opts := insights.TrendsAnalysisOptions{
@@ -246,11 +260,6 @@ func config() mainConfig {
 	}
 	if err := os.MkdirAll(cfg.OutDir, os.ModePerm); err != nil {
 		log.Fatalf("failed to create out dir %s:%v", cfg.OutDir, err)
-	}
-
-	if cfg.StartDate == "" || cfg.FinishDate == "" {
-		cfg.FinishDate = time.Now().UTC().Add(-4 * 24 * time.Hour).Truncate(24 * time.Hour).Format(time.RFC3339)
-		cfg.StartDate = time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
 	}
 
 	return cfg
