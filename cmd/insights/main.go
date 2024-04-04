@@ -60,6 +60,10 @@ func main() {
 
 	requests := make([]insights.RequestTrendsAnalysis, 0, 6)
 
+	/*
+		до 1 марта только INCLUDE_ALL
+	*/
+
 	// TRENDS_ANALYSIS_DATA + Week + CHOOSE_ONLY_DELIVERY
 	opts := insights.TrendsAnalysisOptions{
 		Params:       parameters,
@@ -89,6 +93,21 @@ func main() {
 		panic(err)
 	}
 	requests = append(requests, req)
+
+	// TRENDS_ANALYSIS_DATA + Week + INCLUDE_ALL
+	// opts := insights.TrendsAnalysisOptions{
+	// 	Params:       parameters,
+	// 	PeriodMode:   insights.PeriodMode_Week,
+	// 	DeliveryMode: insights.DeliveryMode_INCLUDE_ALL,
+	// 	BeginDate:    beginWeekDate,
+	// 	EndDate:      endDate,
+	// 	ReportType:   "TRENDS_ANALYSIS_DATA",
+	// }
+	// req, err := cl.Reports.BuildRequestTrendsAnalysis(opts)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// requests = append(requests, req)
 
 	// TRENDS_ANALYSIS_WD + Week + INCLUDE_ALL
 	opts = insights.TrendsAnalysisOptions{
@@ -135,6 +154,21 @@ func main() {
 		panic(err)
 	}
 	requests = append(requests, req)
+
+	// TRENDS_ANALYSIS_DATA + Month + INCLUDE_ALL
+	// opts = insights.TrendsAnalysisOptions{
+	// 	Params:       parameters,
+	// 	PeriodMode:   insights.PeriodMode_Month,
+	// 	DeliveryMode: insights.DeliveryMode_INCLUDE_ALL,
+	// 	BeginDate:    beginDate,
+	// 	EndDate:      endDate,
+	// 	ReportType:   "TRENDS_ANALYSIS_DATA",
+	// }
+	// req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// requests = append(requests, req)
 
 	// TRENDS_ANALYSIS_WD + Month + INCLUDE_ALL
 	opts = insights.TrendsAnalysisOptions{
@@ -205,7 +239,7 @@ func main() {
 			log.Fatalf("failed to create report:%v", status)
 		}
 
-		log.Println("download report")
+		//---------
 
 		f, err := os.Create(fmt.Sprintf("reports/%s.zip", reportName))
 		if err != nil {
@@ -213,8 +247,18 @@ func main() {
 		}
 		defer f.Close()
 
-		if err := cl.Reports.Download(status.ExportFileID, f); err != nil {
-			log.Fatal(err)
+		delay = 0
+		for attempts := 0; attempts < 10; attempts++ {
+			err := cl.Reports.Download(status.ExportFileID, f)
+			if err == nil {
+				log.Println("download report")
+				break
+			}
+
+			log.Printf("failed to download:%v", err)
+			delay += 5 * time.Minute
+			log.Printf("wait %s", delay)
+			time.Sleep(delay)
 		}
 	}
 
