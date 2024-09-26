@@ -37,19 +37,22 @@ type Products struct {
 // ----------------------------------------------------------------------------------------------
 type Region struct {
 	RegionID      string   `json:"regionId"`
+	RegionName    string   `json:"regionName"`
 	SelectedFully bool     `json:"selectedFully"`
 	CitiesID      []string `json:"citiesId,omitempty"`
 }
 
 type FederalDistrict struct {
 	DistrictID    int      `json:"districtId"`
+	DistrictName  string   `json:"districtName"`
 	SelectedFully bool     `json:"selectedFully"`
 	Regions       []Region `json:"regions"`
 }
 
 type NetworkElementlist struct {
 	TradeNetworkID   string            `json:"tradeNetworkId"` // ID from ResultTreeTradeNetworks
-	SelectedFully    bool              `json:"selectedFully"`  // true
+	TradeNetworkName string            `json:"tradeNetworkName"`
+	SelectedFully    bool              `json:"selectedFully"`
 	FederalDistricts []FederalDistrict `json:"federalDistricts"`
 }
 
@@ -126,8 +129,9 @@ type TrendsAnalysisOptions struct {
 	GroupingAttributes []string // SelectedShops.GroupingAttributes
 	BeginDate          time.Time
 	EndDate            time.Time
+	NetworkElementlist []NetworkElementlist
 
-	ReportType string // TRENDS_ANALYSIS_DATA|TRENDS_ANALYSIS_WD
+	ReportType string // TRENDS_ANALYSIS_DATA|TRENDS_ANALYSIS_WD|TRENDS_ANALYSIS_REGION
 }
 
 func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions) (RequestTrendsAnalysis, error) {
@@ -144,14 +148,16 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	}
 	reqReport.Parameters.Products.IsCategoryPluDetailing = true
 
-	var networks []NetworkElementlist
-	for _, id := range opts.Params.TradeNetworkIDs() {
-		nel := NetworkElementlist{
-			TradeNetworkID:   id,
-			SelectedFully:    true,
-			FederalDistricts: []FederalDistrict{},
+	networks := opts.NetworkElementlist
+	if len(networks) == 0 {
+		for _, id := range opts.Params.TradeNetworkIDs() {
+			nel := NetworkElementlist{
+				TradeNetworkID:   id,
+				SelectedFully:    true,
+				FederalDistricts: []FederalDistrict{},
+			}
+			networks = append(networks, nel)
 		}
-		networks = append(networks, nel)
 	}
 
 	var delivery Delivery

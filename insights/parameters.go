@@ -63,6 +63,100 @@ func (rp ReportParameters) TradeNetworkIDs() []string {
 	return ids
 }
 
+func (rp ReportParameters) FederalDistricts() []FederalDistrict {
+	var federals []FederalDistrict
+
+	for _, network := range rp.ResultTreeStores.TradeNetworks {
+		for _, federalDist := range network.FederalDistricts {
+			for _, region := range federalDist.Regions {
+				r := Region{
+					RegionID:      region.ID,
+					RegionName:    region.Name,
+					SelectedFully: true,
+					CitiesID:      []string{},
+				}
+				f := FederalDistrict{
+					DistrictID:    federalDist.ID,
+					DistrictName:  federalDist.Name,
+					SelectedFully: false,
+					Regions:       []Region{r},
+				}
+
+				// ищем дубли
+				found := false
+				for i := range federals {
+					if federals[i].DistrictID == f.DistrictID && federals[i].Regions[0].RegionID == r.RegionID {
+						found = true
+						break
+					}
+				}
+				if found {
+					continue
+				}
+				//
+
+				federals = append(federals, f)
+			}
+		}
+	}
+
+	return federals
+}
+
+/*
+func (rp ReportParameters) FederalDistrictsWithCities() []FederalDistrict {
+	var federals []FederalDistrict
+
+	f, err := os.Create("FederalDistrict.txt")
+	if err != nil {
+		log.Panicf("%s", err)
+	}
+	defer f.Close()
+
+	for _, network := range rp.ResultTreeStores.TradeNetworks {
+		for _, federalDist := range network.FederalDistricts {
+			for _, region := range federalDist.Regions {
+				for _, city := range region.Cities {
+					fmt.Fprintf(f, "%s;%s;%d;%s;%s;%s;%s;%s\n", network.ID, network.Name, federalDist.ID, federalDist.Name, region.ID, region.Name, city.ID, city.Name)
+
+					// log.Printf("%s;%s;%d;%s;%s;%s;%s", network.ID, network.Name, federalDist.ID, federalDist.Name, region.ID, city.ID, city.Name)
+
+					// r := Region{
+					// 	RegionID:      region.ID,
+					// 	RegionName:    region.Name,
+					// 	SelectedFully: true,
+					// 	CitiesID:      []string{},
+					// }
+					// f := FederalDistrict{
+					// 	DistrictID:    federalDist.ID,
+					// 	DistrictName:  federalDist.Name,
+					// 	SelectedFully: false,
+					// 	Regions:       []Region{r},
+					// }
+
+					// // ищем дубли
+					// found := false
+					// for i := range federals {
+					// 	if federals[i].DistrictID == f.DistrictID && federals[i].Regions[0].RegionID == r.RegionID {
+					// 		found = true
+					// 		break
+					// 	}
+					// }
+					// if found {
+					// 	continue
+					// }
+					// //
+
+					// federals = append(federals, f)
+				}
+			}
+		}
+	}
+
+	return federals
+}
+*/
+
 // ProductIDs gets ids of products 4 lvl
 func (rp ReportParameters) ProductIDs() []ProductSectionID {
 	var ids []ProductSectionID
