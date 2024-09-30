@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	URL_REPORT_DOWNLOAD = "/v1/logistics/report/%s/download"
-	URL_REPORT_STATUS   = "/v1/logistics/report/%s/status"
-	URL_REPORT_CREATE   = "/v1/logistics/report"
-	URL_AUTH            = "/v1/logistics/auth"
+	URL_REPORT_DOWNLOAD = "/v2/logistics/report/%s/download"
+	URL_REPORT_STATUS   = "/v2/logistics/report/%s/status"
+	URL_REPORT_CREATE   = "/v2/logistics/report"
+	URL_AUTH            = "/v2/logistics/auth"
 )
 
 type Client struct {
