@@ -128,8 +128,8 @@ func config() mainConfig {
 	}
 
 	if cfg.startDate == "" || cfg.finishDAte == "" {
-		cfg.finishDAte = time.Now().UTC().Add(-4 * 24 * time.Hour).Truncate(24 * time.Hour).Format(time.RFC3339)
-		cfg.startDate = time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
+		cfg.finishDAte = time.Now().UTC().Add(-4 * 24 * time.Hour).Truncate(24 * time.Hour).Format(time.DateOnly)
+		cfg.startDate = time.Now().UTC().Truncate(24 * time.Hour).Format(time.DateOnly)
 	}
 
 	return cfg
