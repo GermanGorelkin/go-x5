@@ -199,7 +199,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sem := make(chan struct{}, 3)
+	sem := make(chan struct{}, 1)
 	var wg sync.WaitGroup
 
 	for _, reqReport := range requests {
@@ -222,6 +222,9 @@ func main() {
 			}
 			log.Printf("save json:%v", string(jsonData))
 
+			if err := cl.Authorization(); err != nil {
+				panic(err)
+			}
 			res, err := cl.Reports.CreateTrends(reqReport)
 			if err != nil {
 				panic(err)
@@ -231,6 +234,9 @@ func main() {
 			var status insights.ResultReportStatus
 			var delay time.Duration
 			for attempts := 0; attempts < 10; attempts++ {
+				if err := cl.Authorization(); err != nil {
+					panic(err)
+				}
 				status, err = cl.Reports.GetReportStatus(res.ID)
 				if err != nil {
 					panic(err)
@@ -245,10 +251,6 @@ func main() {
 				delay += 5 * time.Minute
 				log.Printf("wait %s", delay)
 				time.Sleep(delay)
-
-				if err := cl.Authorization(); err != nil {
-					panic(err)
-				}
 			}
 
 			if status.Status == "FAILED" {
@@ -263,6 +265,9 @@ func main() {
 
 			delay = 0
 			for attempts := 0; attempts < 10; attempts++ {
+				if err := cl.Authorization(); err != nil {
+					panic(err)
+				}
 				err := cl.Reports.Download(status.ExportFileID, f)
 				if err == nil {
 					log.Println("download report")
