@@ -57,8 +57,25 @@ func main() {
 		beginDate, endDate = getPeriod()
 	}
 
-	beginWeekDate := getMonday(beginDate)
-	endWeekDate := getSunday(endDate)
+	//-------------
+	var beginWeekDate, endWeekDate time.Time
+
+	if cfg.StartWeekDate != "" && cfg.FinishWeekDate != "" {
+		beginWeekDate, err = time.Parse("2006-01-02", cfg.StartWeekDate)
+		if err != nil {
+			log.Printf("failed to parse %s:%v", cfg.StartWeekDate, err)
+		}
+		endWeekDate, err = time.Parse("2006-01-02", cfg.FinishWeekDate)
+		if err != nil {
+			log.Printf("failed to parse %s:%v", cfg.FinishWeekDate, err)
+		}
+	}
+	if beginWeekDate.IsZero() || endWeekDate.IsZero() {
+		beginWeekDate = getMonday(beginDate)
+		endWeekDate = getSunday(endDate)
+	}
+
+	//-----------
 
 	requests := make([]insights.RequestTrendsAnalysis, 0, 6)
 
@@ -199,7 +216,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sem := make(chan struct{}, 1)
+	sem := make(chan struct{}, 3)
 	var wg sync.WaitGroup
 
 	for _, reqReport := range requests {
@@ -298,6 +315,8 @@ func config() mainConfig {
 	cfg.Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
 	cfg.StartDate = os.Getenv("START_DATE")
 	cfg.FinishDate = os.Getenv("FINISH_DATE")
+	cfg.StartWeekDate = os.Getenv("START_WEEK_DATE")
+	cfg.FinishWeekDate = os.Getenv("FINISH_WEEK_DATE")
 	cfg.OutDir = os.Getenv("OUT_DIR")
 
 	waiteReportStatusDelaySec := os.Getenv("WAITE_REPORT_STATUS_DELAY_SEC")
@@ -367,6 +386,8 @@ type mainConfig struct {
 	Verbose                   bool
 	StartDate                 string
 	FinishDate                string
+	StartWeekDate             string
+	FinishWeekDate            string
 	OutDir                    string //  Если не заполнять поле то по умолчанию указывается report
 	WaiteReportStatusDelaySec int    //  Если не заполнять поле то по умолчанию указывается 60 sec
 	WaiteReportStatusAttempt  int    //  Если не заполнять поле то по умолчанию указывается 10
