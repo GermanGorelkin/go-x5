@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -79,56 +80,62 @@ func main() {
 
 	requests := make([]insights.RequestTrendsAnalysis, 0, 6)
 
-	/*
-		до 1 марта только INCLUDE_ALL
-	*/
+	var (
+		opts insights.TrendsAnalysisOptions
+		req  insights.RequestTrendsAnalysis
+	)
 
-	// TRENDS_ANALYSIS_DATA + Week + CHOOSE_ONLY_DELIVERY
-	opts := insights.TrendsAnalysisOptions{
-		Params:             parameters,
-		PeriodMode:         insights.PeriodMode_Week,
-		DeliveryMode:       insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
-		BeginDate:          beginWeekDate,
-		EndDate:            endWeekDate,
-		GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
-		ReportType:         "TRENDS_ANALYSIS_DATA",
-	}
-	req, err := cl.Reports.BuildRequestTrendsAnalysis(opts)
-	if err != nil {
-		panic(err)
-	}
-	requests = append(requests, req)
+	if cfg.GroupRequest == 1 {
+		// TRENDS_ANALYSIS_DATA + Week + CHOOSE_ONLY_DELIVERY
+		opts := insights.TrendsAnalysisOptions{
+			Params:             parameters,
+			PeriodMode:         insights.PeriodMode_Week,
+			DeliveryMode:       insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
+			BeginDate:          beginWeekDate,
+			EndDate:            endWeekDate,
+			GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
+			ReportType:         "TRENDS_ANALYSIS_DATA",
+		}
+		req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+		if err != nil {
+			panic(err)
+		}
+		requests = append(requests, req)
 
-	// TRENDS_ANALYSIS_DATA + Week + EXCLUDE
-	opts = insights.TrendsAnalysisOptions{
-		Params:             parameters,
-		PeriodMode:         insights.PeriodMode_Week,
-		DeliveryMode:       insights.DeliveryMode_EXCLUDE,
-		BeginDate:          beginWeekDate,
-		EndDate:            endWeekDate,
-		GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
-		ReportType:         "TRENDS_ANALYSIS_DATA",
+		// TRENDS_ANALYSIS_DATA + Week + EXCLUDE
+		opts = insights.TrendsAnalysisOptions{
+			Params:             parameters,
+			PeriodMode:         insights.PeriodMode_Week,
+			DeliveryMode:       insights.DeliveryMode_EXCLUDE,
+			BeginDate:          beginWeekDate,
+			EndDate:            endWeekDate,
+			GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
+			ReportType:         "TRENDS_ANALYSIS_DATA",
+		}
+		req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+		if err != nil {
+			panic(err)
+		}
+		requests = append(requests, req)
+	} else {
+		// TRENDS_ANALYSIS_DATA + Week + INCLUDE_ALL
+		if cfg.GroupRequest == 2 {
+			opts = insights.TrendsAnalysisOptions{
+				Params:             parameters,
+				PeriodMode:         insights.PeriodMode_Week,
+				DeliveryMode:       insights.DeliveryMode_INCLUDE_ALL,
+				BeginDate:          beginWeekDate,
+				EndDate:            endWeekDate,
+				GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
+				ReportType:         "TRENDS_ANALYSIS_DATA",
+			}
+			req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+			if err != nil {
+				panic(err)
+			}
+			requests = append(requests, req)
+		}
 	}
-	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
-	if err != nil {
-		panic(err)
-	}
-	requests = append(requests, req)
-
-	// TRENDS_ANALYSIS_DATA + Week + INCLUDE_ALL
-	// opts := insights.TrendsAnalysisOptions{
-	// 	Params:       parameters,
-	// 	PeriodMode:   insights.PeriodMode_Week,
-	// 	DeliveryMode: insights.DeliveryMode_INCLUDE_ALL,
-	// 	BeginDate:    beginWeekDate,
-	// 	EndDate:      endWeekDate,
-	// 	ReportType:   "TRENDS_ANALYSIS_DATA",
-	// }
-	// req, err := cl.Reports.BuildRequestTrendsAnalysis(opts)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// requests = append(requests, req)
 
 	// TRENDS_ANALYSIS_WD + Week + INCLUDE_ALL
 	opts = insights.TrendsAnalysisOptions{
@@ -146,52 +153,55 @@ func main() {
 	}
 	requests = append(requests, req)
 
-	// TRENDS_ANALYSIS_DATA + Month + CHOOSE_ONLY_DELIVERY
-	opts = insights.TrendsAnalysisOptions{
-		Params:             parameters,
-		PeriodMode:         insights.PeriodMode_Month,
-		DeliveryMode:       insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
-		BeginDate:          beginDate,
-		EndDate:            endDate,
-		GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
-		ReportType:         "TRENDS_ANALYSIS_DATA",
-	}
-	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
-	if err != nil {
-		panic(err)
-	}
-	requests = append(requests, req)
+	if cfg.GroupRequest == 1 {
+		// TRENDS_ANALYSIS_DATA + Month + CHOOSE_ONLY_DELIVERY
+		opts = insights.TrendsAnalysisOptions{
+			Params:             parameters,
+			PeriodMode:         insights.PeriodMode_Month,
+			DeliveryMode:       insights.DeliveryMode_CHOOSE_ONLY_DELIVERY,
+			BeginDate:          beginDate,
+			EndDate:            endDate,
+			GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
+			ReportType:         "TRENDS_ANALYSIS_DATA",
+		}
+		req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+		if err != nil {
+			panic(err)
+		}
+		requests = append(requests, req)
 
-	// TRENDS_ANALYSIS_DATA + Month + EXCLUDE
-	opts = insights.TrendsAnalysisOptions{
-		Params:             parameters,
-		PeriodMode:         insights.PeriodMode_Month,
-		DeliveryMode:       insights.DeliveryMode_EXCLUDE,
-		BeginDate:          beginDate,
-		EndDate:            endDate,
-		GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
-		ReportType:         "TRENDS_ANALYSIS_DATA",
+		// TRENDS_ANALYSIS_DATA + Month + EXCLUDE
+		opts = insights.TrendsAnalysisOptions{
+			Params:             parameters,
+			PeriodMode:         insights.PeriodMode_Month,
+			DeliveryMode:       insights.DeliveryMode_EXCLUDE,
+			BeginDate:          beginDate,
+			EndDate:            endDate,
+			GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
+			ReportType:         "TRENDS_ANALYSIS_DATA",
+		}
+		req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+		if err != nil {
+			panic(err)
+		}
+		requests = append(requests, req)
+	} else {
+		// TRENDS_ANALYSIS_DATA + Month + INCLUDE_ALL
+		opts = insights.TrendsAnalysisOptions{
+			Params:             parameters,
+			PeriodMode:         insights.PeriodMode_Month,
+			DeliveryMode:       insights.DeliveryMode_INCLUDE_ALL,
+			BeginDate:          beginDate,
+			EndDate:            endDate,
+			GroupingAttributes: []string{"TRADE_NETWORK", "FEDERAL_DISTRICT", "REGION", "CITY"},
+			ReportType:         "TRENDS_ANALYSIS_DATA",
+		}
+		req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
+		if err != nil {
+			panic(err)
+		}
+		requests = append(requests, req)
 	}
-	req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
-	if err != nil {
-		panic(err)
-	}
-	requests = append(requests, req)
-
-	// TRENDS_ANALYSIS_DATA + Month + INCLUDE_ALL
-	// opts = insights.TrendsAnalysisOptions{
-	// 	Params:       parameters,
-	// 	PeriodMode:   insights.PeriodMode_Month,
-	// 	DeliveryMode: insights.DeliveryMode_INCLUDE_ALL,
-	// 	BeginDate:    beginDate,
-	// 	EndDate:      endDate,
-	// 	ReportType:   "TRENDS_ANALYSIS_DATA",
-	// }
-	// req, err = cl.Reports.BuildRequestTrendsAnalysis(opts)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// requests = append(requests, req)
 
 	// TRENDS_ANALYSIS_WD + Month + INCLUDE_ALL
 	opts = insights.TrendsAnalysisOptions{
@@ -216,11 +226,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sem := make(chan struct{}, 3)
+	numReq := 3
+	if cfg.GroupRequest == 2 {
+		numReq = 4
+	}
+
+	sem := make(chan struct{}, numReq)
 	var wg sync.WaitGroup
 
 	for _, reqReport := range requests {
 		wg.Add(1)
+		time.Sleep(5 * time.Second)
 		go func(reqReport insights.RequestTrendsAnalysis) {
 			defer wg.Done()
 			sem <- struct{}{}
@@ -228,16 +244,24 @@ func main() {
 
 			reportName := reqReport.Name
 
+			//---------
 			jsonData, err := json.Marshal(reqReport)
 			if err != nil {
 				panic(err)
 			}
 
-			err = os.WriteFile(fmt.Sprintf("reports/%s.json", reportName), jsonData, 0644)
+			jsonPath := fmt.Sprintf("%s/%s.json", cfg.OutDir, reportName)
+
+			if err := os.MkdirAll(filepath.Dir(jsonPath), 0755); err != nil {
+				log.Fatal(err)
+			}
+
+			err = os.WriteFile(jsonPath, jsonData, 0644)
 			if err != nil {
 				panic(err)
 			}
 			log.Printf("save json:%v", string(jsonData))
+			//--------------
 
 			if err := cl.Authorization(); err != nil {
 				panic(err)
@@ -250,7 +274,7 @@ func main() {
 
 			var status insights.ResultReportStatus
 			var delay time.Duration
-			for attempts := 0; attempts < 10; attempts++ {
+			for attempts := 0; attempts < 36; attempts++ { // 36*5min=3h
 				if err := cl.Authorization(); err != nil {
 					panic(err)
 				}
@@ -265,7 +289,7 @@ func main() {
 					break
 				}
 
-				delay += 5 * time.Minute
+				delay = 5 * time.Minute
 				log.Printf("wait %s", delay)
 				time.Sleep(delay)
 			}
@@ -274,14 +298,22 @@ func main() {
 				log.Fatalf("failed to create report:%v", status)
 			}
 
-			f, err := os.Create(fmt.Sprintf("reports/%s.zip", reportName))
+			//--------
+			reportPath := fmt.Sprintf("%s/%s.zip", cfg.OutDir, reportName)
+
+			if err := os.MkdirAll(filepath.Dir(reportPath), 0755); err != nil {
+				log.Fatal(err)
+			}
+
+			f, err := os.Create(reportPath)
 			if err != nil {
 				log.Fatal(err)
 			}
 			defer f.Close()
+			//--------
 
 			delay = 0
-			for attempts := 0; attempts < 10; attempts++ {
+			for attempts := 0; attempts < 5; attempts++ {
 				if err := cl.Authorization(); err != nil {
 					panic(err)
 				}
@@ -292,7 +324,7 @@ func main() {
 				}
 
 				log.Printf("failed to download:%v", err)
-				delay += 5 * time.Minute
+				delay = 5 * time.Minute
 				log.Printf("wait %s", delay)
 				time.Sleep(delay)
 			}
@@ -319,13 +351,26 @@ func config() mainConfig {
 	cfg.FinishWeekDate = os.Getenv("FINISH_WEEK_DATE")
 	cfg.OutDir = os.Getenv("OUT_DIR")
 
+	//
+	groupRequest := os.Getenv("GROUP_REQUEST")
+	if groupRequest == "" {
+		groupRequest = "1"
+	}
+	n, err := strconv.Atoi(groupRequest)
+	if err != nil {
+		log.Fatalf("failed to parse GROUP_REQUEST=%s", groupRequest)
+	}
+	cfg.GroupRequest = n
+	//
+
+	//
 	waiteReportStatusDelaySec := os.Getenv("WAITE_REPORT_STATUS_DELAY_SEC")
 	waiteReportStatusAttempt := os.Getenv("WAITE_REPORT_STATUS_ATTEMPT")
 
 	if waiteReportStatusDelaySec == "" {
 		waiteReportStatusDelaySec = "60"
 	}
-	n, err := strconv.Atoi(waiteReportStatusDelaySec)
+	n, err = strconv.Atoi(waiteReportStatusDelaySec)
 	if err != nil {
 		log.Fatalf("failed to parse WAITE_REPORT_STATUS_DELAY_SEC=%s", waiteReportStatusDelaySec)
 	}
@@ -391,4 +436,6 @@ type mainConfig struct {
 	OutDir                    string //  Если не заполнять поле то по умолчанию указывается report
 	WaiteReportStatusDelaySec int    //  Если не заполнять поле то по умолчанию указывается 60 sec
 	WaiteReportStatusAttempt  int    //  Если не заполнять поле то по умолчанию указывается 10
+
+	GroupRequest int // 1 (default) - CHOOSE_ONLY_DELIVERY + EXCLUDE + INCLUDE_ALL(WD); 2 - INCLUDE_ALL + INCLUDE_ALL(WD)
 }
