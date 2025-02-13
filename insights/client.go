@@ -80,8 +80,9 @@ func NewClient(cfg ClintConf) (*Client, error) {
 
 // SetToken sets the client's token
 func (c *Client) SetToken(access, refresh, jwt string) {
-	cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
-	c.httpClient.SetHeader("cookie", cookie)
+	// cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
+	// c.httpClient.SetHeader("cookie", cookie)
+	c.httpClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", access))
 	c.httpClient.SetHeader("x5-api-key", jwt)
 }
 

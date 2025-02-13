@@ -65,8 +65,9 @@ func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (
 
 // GetInternalToken returns internal token
 func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToken) (JWTToken, error) {
-	cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
-	srv.client.httpClient.SetHeader("cookie", cookie)
+	// cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
+	// srv.client.httpClient.SetHeader("cookie", cookie)
+	srv.client.httpClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", access))
 
 	url := fmt.Sprintf(URL_INTERNAL_TOKEN, srv.client.API_URL)
 
