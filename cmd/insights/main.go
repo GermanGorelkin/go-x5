@@ -276,11 +276,13 @@ func main() {
 			var delay time.Duration
 			for attempts := 0; attempts < 36; attempts++ { // 36*5min=3h
 				if err := cl.Authorization(); err != nil {
-					panic(err)
+					log.Printf("%v", err)
+					break
 				}
 				status, err = cl.Reports.GetReportStatus(res.ID)
 				if err != nil {
-					panic(err)
+					log.Printf("%v", err)
+					break
 				}
 
 				log.Printf("status:%v", status)
@@ -315,7 +317,8 @@ func main() {
 			delay = 0
 			for attempts := 0; attempts < 5; attempts++ {
 				if err := cl.Authorization(); err != nil {
-					panic(err)
+					log.Printf("%v", err)
+					break
 				}
 				err := cl.Reports.Download(status.ExportFileID, f)
 				if err == nil {
