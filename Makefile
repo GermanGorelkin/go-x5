@@ -9,6 +9,9 @@ GO_MOD_TIDY=go mod tidy
 
 GIT_TAG=$(shell git describe --abbrev=0 --tags)
 VERSION=$(GIT_TAG:v%=%)
+ifeq ($(cmd),)
+$(error cmd is not set. Usage: make docker cmd=insights)
+endif
 
 .PHONY: build docker clean
 
@@ -21,4 +24,3 @@ docker: build
 	docker build -f build/Dockerfile --build-arg "CMD=$(cmd)" -t cr.yandex/crpoinjsjge915cq8ufl/go-x5-$(cmd):$(VERSION) --no-cache .
 clean:
 	rm -r bin/
-
