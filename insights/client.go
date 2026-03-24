@@ -3,6 +3,7 @@ package insights
 import (
 	"fmt"
 
+	"github.com/germangorelkin/go-x5/internal/xlog"
 	httpclient "github.com/germangorelkin/http-client"
 	"go.uber.org/zap"
 )
@@ -48,7 +49,6 @@ type ClintConf struct {
 	KC_URL, KC_RELM           string
 	ClientID, Login, Password string
 	API_URL                   string
-	Verbose                   bool
 	Logger                    *zap.Logger
 }
 
@@ -75,7 +75,7 @@ func NewClient(cfg ClintConf) (*Client, error) {
 			zap.String("kc_realm", cfg.KC_RELM),
 		),
 	}
-	if err := c.httpClient.AddInterceptor(c.loggingInterceptor); err != nil {
+	if err := c.httpClient.AddInterceptor(xlog.NewLoggingInterceptor(c.logger)); err != nil {
 		return nil, fmt.Errorf("failed to add logging interceptor: %w", err)
 	}
 
@@ -84,7 +84,6 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	c.Parameters = (*ParametersService)(&c.common)
 	c.Reports = (*ReportService)(&c.common)
 	c.logger.Debug("client initialized",
-		zap.Bool("verbose", cfg.Verbose),
 		zap.String("client_id", cfg.ClientID),
 	)
 

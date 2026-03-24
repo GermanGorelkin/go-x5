@@ -64,7 +64,7 @@ func (srv *ReportService) Create(req RequestCreateReport) (string, error) {
 	err := srv.client.httpClient.Post(URL_REPORT_CREATE, req, &res)
 	if err != nil || res.Code != "ok" {
 		log.Error("failed to create report", zap.Error(err), zap.String("code", res.Code))
-		return res.Result.ReportID, fmt.Errorf("failed to create report:%w", err)
+		return res.Result.ReportID, fmt.Errorf("failed to create report: %w", err)
 	}
 	log.Info("report created", zap.String("report_id", res.Result.ReportID))
 
@@ -90,7 +90,7 @@ func (srv *ReportService) Status(requestId string) (ResponseStatusReport, error)
 	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_STATUS, requestId), &res)
 	if err != nil || res.Code != "ok" {
 		log.Error("failed to fetch report status", zap.Error(err), zap.String("code", res.Code))
-		return res, fmt.Errorf("failed to get report's status:%w", err)
+		return res, fmt.Errorf("failed to fetch report status: %w", err)
 	}
 	log.Info("report status fetched",
 		zap.String("status", string(res.Result.ReportStatus)),
@@ -106,7 +106,7 @@ func (srv *ReportService) Download(partId string, w io.Writer) error {
 	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_DOWNLOAD, partId), w)
 	if err != nil {
 		log.Error("failed to download report part", zap.Error(err))
-		return fmt.Errorf("failed to download:%w", err)
+		return fmt.Errorf("failed to download report part: %w", err)
 	}
 	log.Info("report part downloaded")
 	return nil

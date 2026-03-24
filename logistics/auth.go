@@ -34,7 +34,7 @@ func (srv *AuthService) Auth(login, password string) (string, error) {
 	err := srv.client.httpClient.Post(URL_AUTH, req, &res)
 	if err != nil || res.Code != "ok" {
 		log.Error("auth request failed", zap.Error(err), zap.String("code", res.Code))
-		return "", fmt.Errorf("failed to auth:%w", err)
+		return "", fmt.Errorf("auth request failed: %w", err)
 	}
 	log.Debug("auth request succeeded")
 

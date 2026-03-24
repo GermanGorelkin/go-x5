@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/germangorelkin/go-x5/internal/xlog"
 	httpclient "github.com/germangorelkin/http-client"
 	"go.uber.org/zap"
 )
@@ -37,7 +38,6 @@ type service struct {
 type ClintConf struct {
 	Instance        string
 	Login, Password string
-	Verbose         bool
 	AutoAuth        bool
 	Logger          *zap.Logger
 }
@@ -66,13 +66,13 @@ func NewClient(cfg ClintConf) (*Client, error) {
 		),
 	}
 
+	if err := c.httpClient.AddInterceptor(xlog.NewLoggingInterceptor(c.logger)); err != nil {
+		return nil, fmt.Errorf("failed to add logging interceptor: %w", err)
+	}
 	if cfg.AutoAuth {
 		if err := c.httpClient.AddInterceptor(c.AuthInterceptor); err != nil {
 			return nil, fmt.Errorf("failed to add auth interceptor: %w", err)
 		}
-	}
-	if err := c.httpClient.AddInterceptor(c.loggingInterceptor); err != nil {
-		return nil, fmt.Errorf("failed to add logging interceptor: %w", err)
 	}
 
 	c.common.client = c
@@ -80,7 +80,6 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	c.Reports = (*ReportService)(&c.common)
 	c.logger.Debug("client initialized",
 		zap.Bool("auto_auth", cfg.AutoAuth),
-		zap.Bool("verbose", cfg.Verbose),
 	)
 
 	return c, nil
@@ -121,7 +120,7 @@ func (c *Client) isUnauthorized(r *http.Response) bool {
 }
 
 func (c *Client) AuthInterceptor(req *http.Request, handler httpclient.Handler) (resp *http.Response, err error) {
-	log := c.requestLogger(req).Named("auth")
+	log := c.logger.With(xlog.RequestFields(req)...).Named("auth")
 
 	// если нет токена и запрос НЕ на его получения, тогда сначала запршиваем токен
 	if req.Header.Get("Authorization") == "" && req.URL.Path != URL_AUTH {

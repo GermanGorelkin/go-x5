@@ -54,7 +54,7 @@ func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (
 	req, err := http.NewRequest("POST", url, strings.NewReader(encodedData))
 	if err != nil {
 		log.Error("failed to build keycloak request", zap.Error(err))
-		return "", "", fmt.Errorf("failed to build NewRequest:%w", err)
+		return "", "", fmt.Errorf("failed to build keycloak request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -63,7 +63,7 @@ func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (
 	_, err = srv.client.httpClient.Do(context.Background(), req, &res)
 	if err != nil || res.AccessToken == "" || res.RefreshToken == "" {
 		log.Error("failed to get keycloak tokens", zap.Error(err))
-		return "", "", fmt.Errorf("failed to kc auth:%w", err)
+		return "", "", fmt.Errorf("failed to get keycloak tokens: %w", err)
 	}
 	log.Debug("keycloak tokens received")
 
@@ -84,7 +84,7 @@ func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToke
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Result.Token == "" {
 		log.Error("failed to get internal token", zap.Error(err), zap.String("code", res.Code))
-		return "", fmt.Errorf("failed to internal auth:%w", err)
+		return "", fmt.Errorf("failed to get internal token: %w", err)
 	}
 	log.Debug("internal token received")
 

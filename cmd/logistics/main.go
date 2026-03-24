@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
+	"github.com/germangorelkin/go-x5/internal/xconfig"
 	"github.com/germangorelkin/go-x5/internal/xlog"
 	"github.com/germangorelkin/go-x5/logistics"
 	"go.uber.org/zap"
@@ -26,7 +26,6 @@ func main() {
 	}
 
 	logger = logger.With(
-		zap.String("instance", cfg.instance),
 		zap.String("sales_channel", string(cfg.salesChannel)),
 		zap.String("report_type", string(cfg.typeReport)),
 		zap.String("out_dir", cfg.outDir),
@@ -37,7 +36,6 @@ func main() {
 		Instance: cfg.instance,
 		Login:    cfg.login,
 		Password: cfg.password,
-		Verbose:  cfg.verbose,
 		AutoAuth: cfg.autoAuth,
 		Logger:   logger,
 	})
@@ -142,19 +140,19 @@ func config(verbose bool) (mainConfig, error) {
 	}
 
 	var err error
-	cfg.autoAuth, err = parseBoolEnv("AUTO_AUTH", false)
+	cfg.autoAuth, err = xconfig.Bool("AUTO_AUTH", false)
 	if err != nil {
 		return cfg, err
 	}
-	cfg.isArchive, err = parseBoolEnv("ARCHIVE", false)
+	cfg.isArchive, err = xconfig.Bool("ARCHIVE", false)
 	if err != nil {
 		return cfg, err
 	}
-	cfg.waiteReportStatusDelaySec, err = parseIntEnv("WAITE_REPORT_STATUS_DELAY_SEC", 10)
+	cfg.waiteReportStatusDelaySec, err = xconfig.Int("WAITE_REPORT_STATUS_DELAY_SEC", 10)
 	if err != nil {
 		return cfg, err
 	}
-	cfg.waiteReportStatusAttempt, err = parseIntEnv("WAITE_REPORT_STATUS_ATTEMPT", 10)
+	cfg.waiteReportStatusAttempt, err = xconfig.Int("WAITE_REPORT_STATUS_ATTEMPT", 10)
 	if err != nil {
 		return cfg, err
 	}
@@ -172,34 +170,6 @@ func config(verbose bool) (mainConfig, error) {
 	}
 
 	return cfg, nil
-}
-
-func parseBoolEnv(key string, defaultValue bool) (bool, error) {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue, nil
-	}
-
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse %s=%q: %w", key, value, err)
-	}
-
-	return parsed, nil
-}
-
-func parseIntEnv(key string, defaultValue int) (int, error) {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue, nil
-	}
-
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse %s=%q: %w", key, value, err)
-	}
-
-	return parsed, nil
 }
 
 type mainConfig struct {

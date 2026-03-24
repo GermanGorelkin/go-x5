@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/germangorelkin/go-x5/internal/xconfig"
 
 	"github.com/germangorelkin/go-x5/insights"
 	"github.com/germangorelkin/go-x5/internal/xlog"
@@ -28,7 +29,6 @@ func main() {
 	}
 
 	logger = logger.With(
-		zap.String("api_url", cfg.API_URL),
 		zap.String("out_dir", cfg.OutDir),
 		zap.Int("group_request", cfg.GroupRequest),
 	)
@@ -41,7 +41,6 @@ func main() {
 		ClientID: cfg.ClientID,
 		Login:    cfg.Login,
 		Password: cfg.Password,
-		Verbose:  cfg.Verbose,
 		Logger:   logger,
 	})
 	if err != nil {
@@ -375,7 +374,7 @@ func config(verbose bool) (mainConfig, error) {
 	}
 
 	var err error
-	cfg.GroupRequest, err = parseIntEnv("GROUP_REQUEST", 1)
+	cfg.GroupRequest, err = xconfig.Int("GROUP_REQUEST", 1)
 	if err != nil {
 		return cfg, err
 	}
@@ -383,11 +382,11 @@ func config(verbose bool) (mainConfig, error) {
 		return cfg, fmt.Errorf("GROUP_REQUEST must be 1 or 2, got %d", cfg.GroupRequest)
 	}
 
-	cfg.WaiteReportStatusDelaySec, err = parseIntEnv("WAITE_REPORT_STATUS_DELAY_SEC", 60)
+	cfg.WaiteReportStatusDelaySec, err = xconfig.Int("WAITE_REPORT_STATUS_DELAY_SEC", 60)
 	if err != nil {
 		return cfg, err
 	}
-	cfg.WaiteReportStatusAttempt, err = parseIntEnv("WAITE_REPORT_STATUS_ATTEMPT", 10)
+	cfg.WaiteReportStatusAttempt, err = xconfig.Int("WAITE_REPORT_STATUS_ATTEMPT", 10)
 	if err != nil {
 		return cfg, err
 	}
@@ -400,20 +399,6 @@ func config(verbose bool) (mainConfig, error) {
 	}
 
 	return cfg, nil
-}
-
-func parseIntEnv(key string, defaultValue int) (int, error) {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue, nil
-	}
-
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse %s=%q: %w", key, value, err)
-	}
-
-	return parsed, nil
 }
 
 func resolvePeriod(
