@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type (
@@ -39,6 +41,7 @@ type ResponseInternalToken struct {
 
 // GetKeyCloakTokens returns access and refresh tokens
 func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (AccessToken, RefreshToken, error) {
+	log := srv.client.loggerFor("auth").With(zap.String("client_id", clientID))
 	data := url.Values{}
 	data.Set("client_id", clientID)
 	data.Set("username", username)
@@ -50,21 +53,26 @@ func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(encodedData))
 	if err != nil {
+		log.Error("failed to build keycloak request", zap.Error(err))
 		return "", "", fmt.Errorf("failed to build NewRequest:%w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	var res ResponseKeyCloakTokens
+	log.Debug("requesting keycloak tokens")
 	_, err = srv.client.httpClient.Do(context.Background(), req, &res)
 	if err != nil || res.AccessToken == "" || res.RefreshToken == "" {
+		log.Error("failed to get keycloak tokens", zap.Error(err))
 		return "", "", fmt.Errorf("failed to kc auth:%w", err)
 	}
+	log.Debug("keycloak tokens received")
 
 	return res.AccessToken, res.RefreshToken, nil
 }
 
 // GetInternalToken returns internal token
 func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToken) (JWTToken, error) {
+	log := srv.client.loggerFor("auth")
 	// cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
 	// srv.client.httpClient.SetHeader("cookie", cookie)
 	srv.client.httpClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", access))
@@ -72,10 +80,13 @@ func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToke
 	url := fmt.Sprintf(URL_INTERNAL_TOKEN, srv.client.API_URL)
 
 	var res ResponseInternalToken
+	log.Debug("requesting internal token")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Result.Token == "" {
+		log.Error("failed to get internal token", zap.Error(err), zap.String("code", res.Code))
 		return "", fmt.Errorf("failed to internal auth:%w", err)
 	}
+	log.Debug("internal token received")
 
 	return res.Result.Token, nil
 }

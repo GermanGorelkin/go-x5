@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -222,48 +224,65 @@ func (rp ReportParameters) GranularityID(name string) string {
 
 func (srv *ParametersService) FetchReportParameters() (ReportParameters, error) {
 	var parameters ReportParameters
+	log := srv.client.loggerFor("parameters")
+	log.Info("fetching report parameters")
 
 	sections, err := srv.GetSections()
 	if err != nil {
+		log.Error("failed to fetch report sections", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetSections:%w", err)
 	}
 	parameters.ResultSections = sections
 
 	dates, err := srv.GetAvailableDates()
 	if err != nil {
+		log.Error("failed to fetch available dates", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetAvailableDates:%w", err)
 	}
 	parameters.ResultAvailableDates = dates
 
 	stores, err := srv.GetTreeStores()
 	if err != nil {
+		log.Error("failed to fetch store tree", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetTreeStores:%w", err)
 	}
 	parameters.ResultTreeStores = stores
 
 	products, err := srv.GetTreeProducts()
 	if err != nil {
+		log.Error("failed to fetch product tree", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetTreeProducts:%w", err)
 	}
 	parameters.ResultTreeProducts = products
 
 	delivery, err := srv.GetDelivery()
 	if err != nil {
+		log.Error("failed to fetch delivery dictionary", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetDelivery:%w", err)
 	}
 	parameters.ResultDelivery = delivery
 
 	granularities, err := srv.GetGranularities()
 	if err != nil {
+		log.Error("failed to fetch granularities", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetGranularities:%w", err)
 	}
 	parameters.ResultGranularities = granularities
 
 	metrics, err := srv.GetMetrics()
 	if err != nil {
+		log.Error("failed to fetch metrics", zap.Error(err))
 		return parameters, fmt.Errorf("failed to GetMetrics:%w", err)
 	}
 	parameters.ResultMetrics = metrics
+	log.Info("report parameters fetched",
+		zap.Int("sections", len(parameters.ResultSections.Reportsections)),
+		zap.Int("trade_networks", len(parameters.ResultTreeStores.TradeNetworks)),
+		zap.Int("product_roots", len(parameters.ResultTreeProducts.Nodes)),
+		zap.Int("delivery_types", len(parameters.ResultDelivery.Types)),
+		zap.Int("metrics", len(parameters.ResultMetrics.MetricGroups)),
+		zap.Int("granularities", len(parameters.ResultGranularities.Granularities)),
+	)
 
 	return parameters, nil
 }
@@ -282,12 +301,16 @@ type ResultSections struct {
 
 // GetSections returns all report sections for REPORT_TYPE_ID
 func (srv *ParametersService) GetSections() (ResultSections, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_BUILD_SECTIONS, srv.client.API_URL, REPORT_TYPE_ID)
 	var res ParametersResponse[ResultSections]
+	log.Debug("fetching report sections")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get report sections", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get sections: %v", err)
 	}
+	log.Debug("report sections fetched", zap.Int("count", len(res.Result.Reportsections)))
 	return res.Result, nil
 }
 
@@ -302,12 +325,19 @@ type ResultAvailableDates struct {
 
 // GetAvailableDates returns all available dates for REPORT_TYPE_ID
 func (srv *ParametersService) GetAvailableDates() (ResultAvailableDates, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_BUILD_AVAILABLE_DATE, srv.client.API_URL, REPORT_TYPE_ID)
 	var res ParametersResponse[ResultAvailableDates]
+	log.Debug("fetching available dates")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get available dates", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get available dates: %v", err)
 	}
+	log.Debug("available dates fetched",
+		zap.String("min_dt", res.Result.MinDT),
+		zap.String("max_dt", res.Result.MaxDT),
+	)
 	return res.Result, nil
 }
 
@@ -341,12 +371,19 @@ type ResultTreeStores struct {
 
 // GetTreeStores gets the tree stores for REPORT_TYPE_ID
 func (srv *ParametersService) GetTreeStores() (ResultTreeStores, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_TREE_STORES, srv.client.API_URL, REPORT_TYPE_ID)
 	var res ParametersResponse[ResultTreeStores]
+	log.Debug("fetching store tree")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get store tree", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get tree stores: %v", err)
 	}
+	log.Debug("store tree fetched",
+		zap.Int("trade_networks", len(res.Result.TradeNetworks)),
+		zap.Int("total_stores", res.Result.TotalStores),
+	)
 	return res.Result, nil
 }
 
@@ -367,12 +404,16 @@ type ResultTreeProducts struct {
 
 // GetTreeProducts gets the tree products for REPORT_TYPE_ID
 func (srv *ParametersService) GetTreeProducts() (ResultTreeProducts, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_TREE_PRODUCTS, srv.client.API_URL, REPORT_TYPE_ID)
 	var res ParametersResponse[ResultTreeProducts]
+	log.Debug("fetching product tree")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get product tree", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get tree products: %v", err)
 	}
+	log.Debug("product tree fetched", zap.Int("roots", len(res.Result.Nodes)))
 	return res.Result, nil
 }
 
@@ -390,12 +431,16 @@ type ResultDelivery struct {
 
 // GetDelivery gets the list of delivery
 func (srv *ParametersService) GetDelivery() (ResultDelivery, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_DELIVERY, srv.client.API_URL)
 	var res ParametersResponse[ResultDelivery]
+	log.Debug("fetching delivery types")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get delivery types", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get delivery: %v", err)
 	}
+	log.Debug("delivery types fetched", zap.Int("count", len(res.Result.Types)))
 	return res.Result, nil
 }
 
@@ -411,12 +456,16 @@ type ResultMetrics struct {
 
 // GetMetrics gets the list of metrics
 func (srv *ParametersService) GetMetrics() (ResultMetrics, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_METRICS, srv.client.API_URL)
 	var res ParametersResponse[ResultMetrics]
+	log.Debug("fetching metrics")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get metrics", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get metrics: %v", err)
 	}
+	log.Debug("metrics fetched", zap.Int("count", len(res.Result.MetricGroups)))
 	return res.Result, nil
 }
 
@@ -432,12 +481,16 @@ type ResultGranularities struct {
 
 // GetGranularities gets the list of granularities
 func (srv *ParametersService) GetGranularities() (ResultGranularities, error) {
+	log := srv.client.loggerFor("parameters")
 	url := fmt.Sprintf(URL_GRANULARITIES, srv.client.API_URL, REPORT_TYPE_ID)
 	var res ParametersResponse[ResultGranularities]
+	log.Debug("fetching granularities")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get granularities", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get granularities: %v", err)
 	}
+	log.Debug("granularities fetched", zap.Int("count", len(res.Result.Granularities)))
 	return res.Result, nil
 }
 
@@ -465,9 +518,13 @@ func ConvertToRequestProductsDownloadNode(src []ProductSectionID) []RequestProdu
 }
 
 func (srv *ParametersService) ProductsDownload(rpd RequestProductsDownload, w io.Writer) error {
+	log := srv.client.loggerFor("parameters").With(zap.Int("nodes", len(rpd.Nodes)))
+	log.Info("downloading products export")
 	err := srv.client.httpClient.Post(fmt.Sprintf(URL_PRODUCTS_EXPORT, srv.client.API_URL), rpd, w)
 	if err != nil {
+		log.Error("failed to download products export", zap.Error(err))
 		return fmt.Errorf("failed to download:%w", err)
 	}
+	log.Info("products export downloaded")
 	return nil
 }

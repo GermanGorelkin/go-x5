@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type ReportService service
@@ -136,6 +138,12 @@ type TrendsAnalysisOptions struct {
 
 func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions) (RequestTrendsAnalysis, error) {
 	var reqReport RequestTrendsAnalysis
+	log := srv.client.loggerFor("reports").With(
+		zap.String("report_type", opts.ReportType),
+		zap.Time("begin_date", opts.BeginDate),
+		zap.Time("end_date", opts.EndDate),
+	)
+	log.Debug("building trends analysis request")
 
 	reqReport.Name = uniqueReportName(opts)
 	reqReport.Type = REPORT_TYPE_ID
@@ -210,9 +218,11 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 
 	_, maxDR, err := opts.Params.AvailableDates()
 	if err != nil {
+		log.Error("failed to parse available dates", zap.Error(err))
 		return reqReport, fmt.Errorf("failed to get available dates: %w", err)
 	}
 	if opts.EndDate.After(maxDR) {
+		log.Debug("end date exceeds max available date", zap.Time("max_available_date", maxDR))
 		opts.EndDate = maxDR
 	}
 
@@ -228,6 +238,14 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	reqReport.Parameters.MetricGroups = opts.Params.MetricIDs()
 
 	reqReport.Export = true
+	log.Info("trends analysis request built",
+		zap.String("request_name", reqReport.Name),
+		zap.Int("section_ids", len(reqReport.SectionIDs)),
+		zap.Int("product_nodes", len(reqReport.Parameters.Products.Selection)),
+		zap.Int("metric_groups", len(reqReport.Parameters.MetricGroups)),
+		zap.String("granularity", reqReport.Parameters.Periods.PeriodGranularityName),
+		zap.String("delivery_mode", reqReport.Parameters.SelectedShops.Delivery.DeliveryMode),
+	)
 
 	return reqReport, nil
 }
@@ -270,12 +288,19 @@ type ResultTrendsAnalysis struct {
 
 // CreateTrends creates trends analysis
 func (srv *ReportService) CreateTrends(request RequestTrendsAnalysis) (ResultTrendsAnalysis, error) {
+	log := srv.client.loggerFor("reports").With(
+		zap.String("request_name", request.Name),
+		zap.String("report_type_id", request.Type),
+	)
 	url := fmt.Sprintf(URL_CREATE_TRENDS, srv.client.API_URL)
 	var res ReportResponse[ResultTrendsAnalysis]
+	log.Info("creating trends report")
 	err := srv.client.httpClient.Post(url, request, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to create trends report", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to create trends: %v", err)
 	}
+	log.Info("trends report created", zap.String("report_id", res.Result.ID))
 	return res.Result, nil
 }
 
@@ -304,21 +329,32 @@ type ResultReportStatus struct {
 }
 
 func (srv *ReportService) GetReportStatus(reportID string) (ResultReportStatus, error) {
+	log := srv.client.loggerFor("reports").With(zap.String("report_id", reportID))
 	url := fmt.Sprintf(URL_REPORT_STATUS, srv.client.API_URL, reportID)
 	var res ReportResponse[ResultReportStatus]
+	log.Debug("fetching report status")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil || res.Code != "ok" {
+		log.Error("failed to get report status", zap.Error(err), zap.String("code", res.Code))
 		return res.Result, fmt.Errorf("failed to get report status: %v", err)
 	}
+	log.Info("report status fetched",
+		zap.String("status", res.Result.Status),
+		zap.String("export_file_id", res.Result.ExportFileID),
+	)
 	return res.Result, nil
 }
 
 // ----------------------------------------------------------------------------------------------
 
 func (srv *ReportService) Download(exportFileID string, w io.Writer) error {
+	log := srv.client.loggerFor("reports").With(zap.String("export_file_id", exportFileID))
+	log.Info("downloading report export")
 	err := srv.client.httpClient.Get(fmt.Sprintf(URL_REPORT_EXPORT, srv.client.API_URL, exportFileID), w)
 	if err != nil {
+		log.Error("failed to download report export", zap.Error(err))
 		return fmt.Errorf("failed to download:%w", err)
 	}
+	log.Info("report export downloaded")
 	return nil
 }

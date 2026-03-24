@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	httpclient "github.com/germangorelkin/http-client"
+	"go.uber.org/zap"
 )
 
 const (
@@ -35,6 +36,7 @@ type Client struct {
 	Reports    *ReportService
 
 	httpClient *httpclient.Client
+	logger     *zap.Logger
 	common     service // Reuse a single struct instead of allocating one for each service on the heap.
 }
 
@@ -47,6 +49,7 @@ type ClintConf struct {
 	ClientID, Login, Password string
 	API_URL                   string
 	Verbose                   bool
+	Logger                    *zap.Logger
 }
 
 func NewClient(cfg ClintConf) (*Client, error) {
@@ -54,10 +57,9 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build http-client:%w", err)
 	}
-	if cfg.Verbose {
-		if err := cl.AddInterceptor(httpclient.DumpInterceptor); err != nil {
-			return nil, err
-		}
+	logger := cfg.Logger
+	if logger == nil {
+		logger = zap.NewNop()
 	}
 
 	c := &Client{
@@ -68,12 +70,23 @@ func NewClient(cfg ClintConf) (*Client, error) {
 		Login:      cfg.Login,
 		Password:   cfg.Password,
 		httpClient: cl,
+		logger: logger.Named("insights").With(
+			zap.String("api_url", cfg.API_URL),
+			zap.String("kc_realm", cfg.KC_RELM),
+		),
+	}
+	if err := c.httpClient.AddInterceptor(c.loggingInterceptor); err != nil {
+		return nil, fmt.Errorf("failed to add logging interceptor: %w", err)
 	}
 
 	c.common.client = c
 	c.Auth = (*AuthService)(&c.common)
 	c.Parameters = (*ParametersService)(&c.common)
 	c.Reports = (*ReportService)(&c.common)
+	c.logger.Debug("client initialized",
+		zap.Bool("verbose", cfg.Verbose),
+		zap.String("client_id", cfg.ClientID),
+	)
 
 	return c, nil
 }
@@ -84,21 +97,28 @@ func (c *Client) SetToken(access, refresh, jwt string) {
 	// c.httpClient.SetHeader("cookie", cookie)
 	c.httpClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", access))
 	c.httpClient.SetHeader("x5-api-key", jwt)
+	c.logger.Debug("authorization headers updated")
 }
 
 // Authorization full authorizations in the system
 func (c *Client) Authorization() error {
+	log := c.loggerFor("auth")
+	log.Info("starting authorization flow")
+
 	access, refresh, err := c.Auth.GetKeyCloakTokens(c.ClientID, c.Login, c.Password)
 	if err != nil {
+		log.Error("failed to get keycloak tokens", zap.Error(err))
 		return fmt.Errorf("failed to get keycloak tokens:%w", err)
 	}
 
 	jwt, err := c.Auth.GetInternalToken(access, refresh)
 	if err != nil {
+		log.Error("failed to get internal token", zap.Error(err))
 		return fmt.Errorf("failed to get internal token:%w", err)
 	}
 
 	c.SetToken(string(access), string(refresh), string(jwt))
+	log.Info("authorization flow completed")
 
 	return nil
 }
