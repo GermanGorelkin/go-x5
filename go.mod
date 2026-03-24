@@ -1,8 +1,6 @@
 module github.com/germangorelkin/go-x5
 
-go 1.22.0
-
-toolchain go1.23.0
+go 1.24.0
 
 require (
 	github.com/germangorelkin/http-client v0.5.0

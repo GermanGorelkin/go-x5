@@ -4,13 +4,13 @@
 `go-x5` is a small Go module split by API domain. Library code lives in `logistics/` and `insights/`. CLI entrypoints live in `cmd/<name>/main.go`; current commands are `logistics`, `logistics-reload`, `insights`, and `insights-products`. Cross-platform build artifacts are written to `bin/`. Docker packaging is in `build/Dockerfile`. Sample requests and exported report files live in `examples/`. GitHub Actions CI is defined in `.github/workflows/tests.yml`.
 
 ## Build, Test, and Development Commands
-Use the Go toolchain declared in `go.mod` (`go 1.22`, toolchain `go1.23.0`).
+Use the Go version declared in `go.mod` (`go 1.24`).
 
 - `go test ./...` runs the full test suite.
 - `go test ./... -v` matches the CI test command.
 - `go build ./...` checks that all packages and commands compile.
 - `make build cmd=logistics` runs `go mod tidy` and builds `bin/logistics/{linux,darwin,win}`.
-- `make docker cmd=insights` builds the command binaries, then creates the image from `build/Dockerfile`.
+- `make docker cmd=insights` builds the container image from `build/Dockerfile` for `linux/amd64`.
 - `go run ./cmd/logistics` is the fastest way to exercise a command locally with env vars such as `INSTANCE`, `LOGIN`, `PASSWORD`, and `OUT_DIR`.
 
 ## Coding Style & Naming Conventions
