@@ -6,13 +6,19 @@ import (
 	"go.uber.org/zap"
 )
 
+// AuthService handles authentication against the X5 Logistics API.
+// It is backed by the shared service struct so it can reuse the parent Client.
 type AuthService service
 
+// RequestAuth is the JSON payload sent to the auth endpoint.
+// Login is serialized as "email" to match the API contract.
 type RequestAuth struct {
 	Login    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// ResponseAuth is the JSON payload returned by the auth endpoint.
+// A successful response contains Code "ok" and a bearer token inside Result.
 type ResponseAuth struct {
 	Code        string `json:"code"`
 	Description string `json:"description"`

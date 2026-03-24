@@ -1,3 +1,8 @@
+// CLI tool that fetches report parameters from the X5 Insights API, builds
+// multiple TrendsAnalysis report requests (weekly + monthly periods, with
+// different delivery modes depending on the GroupRequest configuration),
+// submits them concurrently, polls each report's status until completion,
+// and downloads the results as ZIP files.
 package main
 
 import (
@@ -16,6 +21,7 @@ import (
 )
 
 func main() {
+	// Step 1: Bootstrap structured logger and load configuration from env vars.
 	logger, verbose, err := xlog.Bootstrap("insights")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to bootstrap logger: %v\n", err)
@@ -34,6 +40,7 @@ func main() {
 	)
 	logger.Info("command started")
 
+	// Step 2: Create the Insights API client and authenticate via Keycloak.
 	cl, err := insights.NewClient(insights.ClintConf{
 		KC_URL:   cfg.KC_URL,
 		KC_RELM:  cfg.KC_RELM,
@@ -52,11 +59,15 @@ func main() {
 		logger.Fatal("authorization failed", zap.Error(err))
 	}
 
+	// Step 3: Fetch available report parameters (products, networks, etc.)
+	// that will be embedded into every report request.
 	parameters, err := cl.Parameters.FetchReportParameters()
 	if err != nil {
 		logger.Fatal("failed to fetch report parameters", zap.Error(err))
 	}
 
+	// Step 4: Resolve monthly and weekly date ranges. If env vars are not set
+	// or cannot be parsed, fall back to the previous-month / corresponding-week range.
 	beginDate, endDate := resolvePeriod(
 		logger.Named("dates"),
 		cfg.StartDate,
@@ -74,12 +85,16 @@ func main() {
 		"week",
 	)
 
+	// Step 5: Build the set of TrendsAnalysis requests based on GroupRequest mode.
 	requests, err := buildRequests(cl, parameters, cfg.GroupRequest, beginDate, endDate, beginWeekDate, endWeekDate)
 	if err != nil {
 		logger.Fatal("failed to build report requests", zap.Error(err))
 	}
 	logger.Info("report requests prepared", zap.Int("count", len(requests)))
 
+	// Step 6: Submit all reports concurrently with a bounded semaphore.
+	// GroupRequest==1 produces up to 6 requests run 3 at a time;
+	// GroupRequest==2 produces 4 requests run 4 at a time.
 	numReq := 3
 	if cfg.GroupRequest == 2 {
 		numReq = 4
@@ -91,7 +106,7 @@ func main() {
 	var wg sync.WaitGroup
 	for _, reqReport := range requests {
 		wg.Add(1)
-		time.Sleep(5 * time.Second)
+		time.Sleep(5 * time.Second) // stagger launches to avoid API rate-limiting
 
 		go func(reqReport insights.RequestTrendsAnalysis) {
 			defer wg.Done()
@@ -109,6 +124,7 @@ func main() {
 		}(reqReport)
 	}
 
+	// Step 7: Wait for all goroutines and collect errors.
 	wg.Wait()
 	close(errCh)
 
@@ -126,6 +142,14 @@ func main() {
 	logger.Info("command completed")
 }
 
+// buildRequests constructs the full set of TrendsAnalysis report requests.
+//
+// The grouping strategy depends on groupRequest:
+//   - GroupRequest==1: for each period (weekly, monthly) two DATA requests are
+//     created with separate delivery modes (CHOOSE_ONLY_DELIVERY and EXCLUDE)
+//     plus one WD request with INCLUDE_ALL, totalling 6 requests.
+//   - GroupRequest==2: for each period a single DATA request uses INCLUDE_ALL
+//     instead of splitting by delivery, plus one WD request, totalling 4 requests.
 func buildRequests(
 	cl *insights.Client,
 	parameters insights.ReportParameters,
@@ -143,6 +167,9 @@ func buildRequests(
 		return nil
 	}
 
+	// --- Weekly DATA requests ---
+	// GroupRequest==1: split into delivery-only and exclude-delivery requests.
+	// GroupRequest==2: single INCLUDE_ALL request covering all delivery modes.
 	if groupRequest == 1 {
 		if err := addRequest(insights.TrendsAnalysisOptions{
 			Params:             parameters,
@@ -180,6 +207,7 @@ func buildRequests(
 		}
 	}
 
+	// Weekly WD request — always uses INCLUDE_ALL regardless of groupRequest.
 	if err := addRequest(insights.TrendsAnalysisOptions{
 		Params:             parameters,
 		PeriodMode:         insights.PeriodMode_Week,
@@ -192,6 +220,7 @@ func buildRequests(
 		return nil, err
 	}
 
+	// --- Monthly DATA requests --- (same split logic as weekly above)
 	if groupRequest == 1 {
 		if err := addRequest(insights.TrendsAnalysisOptions{
 			Params:             parameters,
@@ -229,6 +258,7 @@ func buildRequests(
 		}
 	}
 
+	// Monthly WD request — always INCLUDE_ALL.
 	if err := addRequest(insights.TrendsAnalysisOptions{
 		Params:             parameters,
 		PeriodMode:         insights.PeriodMode_Month,
@@ -244,9 +274,15 @@ func buildRequests(
 	return requests, nil
 }
 
+// runReport handles the full lifecycle of a single report:
+//  1. Serialize and save the request JSON to disk for debugging/auditing.
+//  2. Submit the report creation request to the API.
+//  3. Poll the report status in a loop (up to 36 attempts × 5 min = 3 hours max).
+//  4. On success, download the resulting ZIP file with retry (up to 5 attempts × 5 min).
 func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport insights.RequestTrendsAnalysis) error {
 	logger.Info("starting report job")
 
+	// Save the request payload as JSON for later inspection.
 	jsonData, err := json.Marshal(reqReport)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request %s: %w", reqReport.Name, err)
@@ -264,6 +300,7 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 		zap.Int("bytes", len(jsonData)),
 	)
 
+	// Re-authorize and submit the report creation request.
 	if err := cl.Authorization(); err != nil {
 		return fmt.Errorf("failed to authorize before create for %s: %w", reqReport.Name, err)
 	}
@@ -275,8 +312,10 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 	reportLog := logger.With(zap.String("report_id", res.ID))
 	reportLog.Info("report job created")
 
+	// Poll the report status until it reaches a terminal state (SUCCEEDED or FAILED).
+	// Maximum wait time: 36 attempts × 5 min = 3 hours.
 	var status insights.ResultReportStatus
-	for attempt := 1; attempt <= 36; attempt++ { // 36 * 5min = 3h
+	for attempt := 1; attempt <= 36; attempt++ {
 		if err := cl.Authorization(); err != nil {
 			return fmt.Errorf("failed to authorize before status check for %s: %w", reqReport.Name, err)
 		}
@@ -308,6 +347,7 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 		return fmt.Errorf("report %s did not reach terminal success state: %+v", reqReport.Name, status)
 	}
 
+	// Download the completed report as a ZIP file.
 	reportPath := filepath.Join(outDir, reqReport.Name+".zip")
 	if err := os.MkdirAll(filepath.Dir(reportPath), 0755); err != nil {
 		return fmt.Errorf("failed to create report directory %s: %w", filepath.Dir(reportPath), err)
@@ -323,9 +363,10 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 		}
 	}()
 
+	// Retry the download up to 5 times with a 5-minute pause between attempts.
 	var downloadErr error
 	for attempt := 1; attempt <= 5; attempt++ {
-		if attempt > 1 {
+		if attempt > 1 { // Reset file for a clean retry.
 			if err := f.Truncate(0); err != nil {
 				return fmt.Errorf("failed to truncate report file %s: %w", reportPath, err)
 			}
@@ -357,6 +398,7 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 	return fmt.Errorf("failed to download report %s after retries: %w", reqReport.Name, downloadErr)
 }
 
+// config reads all configuration from environment variables and applies defaults.
 func config(verbose bool) (mainConfig, error) {
 	cfg := mainConfig{
 		KC_URL:         os.Getenv("KC_URL"),
@@ -401,6 +443,9 @@ func config(verbose bool) (mainConfig, error) {
 	return cfg, nil
 }
 
+// resolvePeriod attempts to parse explicit start/finish date strings (YYYY-MM-DD).
+// If either value is missing or unparseable, it falls back to a computed default
+// provided by the fallback function. periodKind is used only for log messages.
 func resolvePeriod(
 	logger *zap.Logger,
 	startValue, finishValue string,
@@ -445,7 +490,9 @@ func resolvePeriod(
 	return beginDate, endDate
 }
 
-// getPeriod gets period form prev month to curr month
+// getPeriod returns the default monthly date range: from the 1st of the previous
+// month to the current UTC time. For example, if today is 2024-07-15 the range
+// is 2024-06-01 … 2024-07-15.
 func getPeriod() (begin, end time.Time) {
 	now := time.Now().UTC()
 	firstOfMonth := now.AddDate(0, 0, -now.Day()+1) // day=1
@@ -453,7 +500,8 @@ func getPeriod() (begin, end time.Time) {
 	return prevMonth, now
 }
 
-// getMonday gets Monday of the current week
+// getMonday walks backwards from dt until it reaches a Monday.
+// Used to align the weekly period start to the beginning of the week.
 func getMonday(dt time.Time) time.Time {
 	mon := dt
 	for mon.Weekday() != time.Monday {
@@ -462,6 +510,8 @@ func getMonday(dt time.Time) time.Time {
 	return mon
 }
 
+// getSunday walks forward from dt until it reaches a Sunday.
+// Used to align the weekly period end to the end of the week.
 func getSunday(dt time.Time) time.Time {
 	d := dt
 	for d.Weekday() != time.Sunday {
@@ -483,9 +533,14 @@ type mainConfig struct {
 	FinishDate                string
 	StartWeekDate             string
 	FinishWeekDate            string
-	OutDir                    string // Если не заполнять поле то по умолчанию указывается report.
-	WaiteReportStatusDelaySec int    // Если не заполнять поле то по умолчанию указывается 60 sec.
-	WaiteReportStatusAttempt  int    // Если не заполнять поле то по умолчанию указывается 10.
+	OutDir                    string // Output directory for reports. Defaults to "reports" when not set.
+	WaiteReportStatusDelaySec int    // Delay in seconds between status polls. Defaults to 60.
+	WaiteReportStatusAttempt  int    // Maximum number of status poll attempts. Defaults to 10.
 
-	GroupRequest int // 1 (default) - CHOOSE_ONLY_DELIVERY + EXCLUDE + INCLUDE_ALL(WD); 2 - INCLUDE_ALL + INCLUDE_ALL(WD)
+	// GroupRequest selects the delivery-mode grouping strategy:
+	//   1 (default) — each period produces separate CHOOSE_ONLY_DELIVERY and
+	//                  EXCLUDE requests plus an INCLUDE_ALL WD request (6 total).
+	//   2           — each period uses a single INCLUDE_ALL request plus an
+	//                  INCLUDE_ALL WD request (4 total).
+	GroupRequest int
 }

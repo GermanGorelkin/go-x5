@@ -1,3 +1,6 @@
+// Package xlog provides structured logging helpers built on top of zap.
+// It includes Bootstrap for CLI command initialization, a shared Config
+// builder, and a safe Sync wrapper that silences common stdio errors.
 package xlog
 
 import (
@@ -12,7 +15,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Bootstrap builds a command logger using the shared VERBOSE env convention.
+// Bootstrap builds a ready-to-use logger for the given CLI command.
+// It reads the VERBOSE environment variable to decide the log level
+// (debug when true, info otherwise) and returns the logger, the parsed
+// verbose flag, and any error encountered during setup.
 func Bootstrap(command string) (*zap.Logger, bool, error) {
 	verboseValue := os.Getenv("VERBOSE")
 	verbose := false
@@ -33,6 +39,8 @@ func Bootstrap(command string) (*zap.Logger, bool, error) {
 }
 
 // Config returns the shared zap configuration for the project.
+// When verbose is true the level is set to Debug; otherwise Info.
+// Output is JSON-encoded and written to stderr.
 func Config(verbose bool) zap.Config {
 	level := zap.NewAtomicLevelAt(zap.InfoLevel)
 	if verbose {
@@ -61,11 +69,17 @@ func Config(verbose bool) zap.Config {
 	}
 }
 
-// New builds the default project logger.
+// New builds the default project logger for the named command.
+// It delegates to newWithSyncer with a nil sink so that the zap
+// config's OutputPaths (stderr) are used.
 func New(command string, verbose bool) (*zap.Logger, error) {
 	return newWithSyncer(command, verbose, nil)
 }
 
+// newWithSyncer is the internal constructor shared by New and tests.
+// When sink is nil the logger is built from the standard Config; otherwise
+// the provided WriteSyncer is used as the log destination, which allows
+// tests to capture output without touching stderr.
 func newWithSyncer(command string, verbose bool, sink zapcore.WriteSyncer) (*zap.Logger, error) {
 	cfg := Config(verbose)
 
@@ -93,7 +107,9 @@ func newWithSyncer(command string, verbose bool, sink zapcore.WriteSyncer) (*zap
 	return logger, nil
 }
 
-// Sync flushes buffered logs and ignores common stdio sync errors.
+// Sync flushes any buffered log entries. It silently ignores ENOTTY and
+// EINVAL errors that occur when stderr is not a real file (e.g. in
+// containers or CI pipelines), preventing noisy exit-time warnings.
 func Sync(logger *zap.Logger) {
 	if logger == nil {
 		return

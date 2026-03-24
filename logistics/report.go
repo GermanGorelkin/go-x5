@@ -12,29 +12,31 @@ type TypeReport string
 type ReportStatus string
 
 const (
-	TS5   SalesChannel = "TS5" // ТС Пятерочка
-	TSX   SalesChannel = "TSX" // ТС Перекресток
-	TSK   SalesChannel = "TSK" // ТС Карусель
-	TSALL SalesChannel = "ALL" // Все каналы
+	TS5   SalesChannel = "TS5" // Pyaterochka
+	TSX   SalesChannel = "TSX" // Perekrestok
+	TSK   SalesChannel = "TSK" // Karusel
+	TSALL SalesChannel = "ALL" // All channels
 
-	SALES             TypeReport = "SALES"             // отчет по продажам
-	INVENTORY         TypeReport = "INVENTORY"         // отчет по остаткам
-	MOVEMENT          TypeReport = "MOVEMENT"          // отчет списания
-	CHECK             TypeReport = "CHECK"             // Все каналы
-	PRODUCT_DIRECTORY TypeReport = "PRODUCT_DIRECTORY" // Все каналы
-	SHOP_DIRECTORY    TypeReport = "SHOP_DIRECTORY"    // Все каналы
+	SALES             TypeReport = "SALES"             // sales report
+	INVENTORY         TypeReport = "INVENTORY"         // inventory report
+	MOVEMENT          TypeReport = "MOVEMENT"          // write-off report
+	CHECK             TypeReport = "CHECK"             // all channels
+	PRODUCT_DIRECTORY TypeReport = "PRODUCT_DIRECTORY" // all channels
+	SHOP_DIRECTORY    TypeReport = "SHOP_DIRECTORY"    // all channels
 
-	CREATED              ReportStatus = "CREATED"              //создан запрос
-	BUILD                ReportStatus = "BUILD"                // отчет в генерации
-	DONE                 ReportStatus = "DONE"                 // отчет подготовлен
-	ERROR                ReportStatus = "ERROR"                // ошибка при создании отчета
-	DOWNLOADED           ReportStatus = "DOWNLOADED"           // отчет загружен
-	REMOVAL_EXPIRED_TIME ReportStatus = "REMOVAL_EXPIRED_TIME" // удалено по истечению времени
-	REMOVAL_MANUAL       ReportStatus = "REMOVAL_MANUAL"       // удалено администратором вручную
+	CREATED              ReportStatus = "CREATED"              // request created
+	BUILD                ReportStatus = "BUILD"                // report is being generated
+	DONE                 ReportStatus = "DONE"                 // report ready
+	ERROR                ReportStatus = "ERROR"                // report generation error
+	DOWNLOADED           ReportStatus = "DOWNLOADED"           // report downloaded
+	REMOVAL_EXPIRED_TIME ReportStatus = "REMOVAL_EXPIRED_TIME" // removed due to expiration
+	REMOVAL_MANUAL       ReportStatus = "REMOVAL_MANUAL"       // removed manually by admin
 )
 
+// ReportService handles report creation, status polling, and downloading.
 type ReportService service
 
+// RequestCreateReport holds the parameters for creating a new report request.
 type RequestCreateReport struct {
 	FinishDate   string       `json:"finishDate"`
 	StartDate    string       `json:"startDate"`
@@ -42,6 +44,8 @@ type RequestCreateReport struct {
 	TypeReport   TypeReport   `json:"typeReport"`
 	IsArchive    bool         `json:"isArchive"`
 }
+
+// ResponseCreateReport is the API response returned after a report creation request.
 type ResponseCreateReport struct {
 	Code        string `json:"code"`
 	Description string `json:"description"`
@@ -71,6 +75,7 @@ func (srv *ReportService) Create(req RequestCreateReport) (string, error) {
 	return res.Result.ReportID, nil
 }
 
+// ResponseStatusReport is the API response returned when polling report status.
 type ResponseStatusReport struct {
 	Code        string `json:"code"`
 	Description string `json:"description"`

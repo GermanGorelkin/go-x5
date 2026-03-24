@@ -1,3 +1,7 @@
+// Command logistics creates a report on the X5 retail logistics platform,
+// polls for its completion status, and downloads each report part to a
+// local output directory. All configuration is supplied via environment
+// variables (INSTANCE, LOGIN, PASSWORD, SALES_CHANNEL, TYPE_REPORT, etc.).
 package main
 
 import (
@@ -13,6 +17,8 @@ import (
 )
 
 func main() {
+	// Step 1: Bootstrap the structured logger; verbosity is derived from
+	// environment/flag settings inside xlog.Bootstrap.
 	logger, verbose, err := xlog.Bootstrap("logistics")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to bootstrap logger: %v\n", err)
@@ -20,11 +26,14 @@ func main() {
 	}
 	defer xlog.Sync(logger)
 
+	// Step 2: Load and validate the runtime configuration from environment
+	// variables, applying sensible defaults where values are missing.
 	cfg, err := config(verbose)
 	if err != nil {
 		logger.Fatal("invalid configuration", zap.Error(err))
 	}
 
+	// Enrich all subsequent log lines with the key config values.
 	logger = logger.With(
 		zap.String("sales_channel", string(cfg.salesChannel)),
 		zap.String("report_type", string(cfg.typeReport)),
@@ -32,6 +41,7 @@ func main() {
 	)
 	logger.Info("command started")
 
+	// Step 3: Create an authenticated logistics API client.
 	cli, err := logistics.NewClient(logistics.ClintConf{
 		Instance: cfg.instance,
 		Login:    cfg.login,
@@ -44,6 +54,7 @@ func main() {
 	}
 	logger.Info("client created", zap.Bool("auto_auth", cfg.autoAuth))
 
+	// Step 4: Submit a report creation request to the platform.
 	reqCR := logistics.RequestCreateReport{
 		StartDate:    cfg.startDate,
 		FinishDate:   cfg.finishDAte,
@@ -65,6 +76,8 @@ func main() {
 	reportLog := logger.With(zap.String("report_id", reportID))
 	reportLog.Info("report created")
 
+	// Step 5: Poll the report status in a loop until it reaches DONE or
+	// ERROR, sleeping between each attempt.
 	delay := time.Duration(cfg.waiteReportStatusDelaySec) * time.Second
 	var resStatus logistics.ResponseStatusReport
 
@@ -92,6 +105,7 @@ func main() {
 		)
 	}
 
+	// Step 6: Verify the report finished successfully; abort otherwise.
 	if resStatus.Result.ReportStatus != logistics.DONE {
 		reportLog.Fatal("report generation did not finish successfully",
 			zap.String("status", string(resStatus.Result.ReportStatus)),
@@ -100,6 +114,7 @@ func main() {
 	}
 	reportLog.Info("report ready", zap.Int("parts", len(resStatus.Result.PartIds)))
 
+	// Step 7: Download each report part to the configured output directory.
 	for _, partID := range resStatus.Result.PartIds {
 		path := filepath.Join(cfg.outDir, partID)
 		partLog := reportLog.With(
@@ -126,6 +141,9 @@ func main() {
 	logger.Info("command completed")
 }
 
+// config reads environment variables and returns a populated mainConfig.
+// It applies default values for optional fields and ensures the output
+// directory exists on disk.
 func config(verbose bool) (mainConfig, error) {
 	cfg := mainConfig{
 		instance:     os.Getenv("INSTANCE"),
@@ -157,6 +175,7 @@ func config(verbose bool) (mainConfig, error) {
 		return cfg, err
 	}
 
+	// Default the output directory to "reports" when not specified.
 	if cfg.outDir == "" {
 		cfg.outDir = "reports"
 	}
@@ -164,6 +183,8 @@ func config(verbose bool) (mainConfig, error) {
 		return cfg, fmt.Errorf("failed to create out dir %s: %w", cfg.outDir, err)
 	}
 
+	// When dates are omitted, default to a window from 4 days ago (finish)
+	// to today (start). Both dates are truncated to midnight UTC.
 	if cfg.startDate == "" || cfg.finishDAte == "" {
 		cfg.finishDAte = time.Now().UTC().Add(-4 * 24 * time.Hour).Truncate(24 * time.Hour).Format(time.DateOnly)
 		cfg.startDate = time.Now().UTC().Truncate(24 * time.Hour).Format(time.DateOnly)
@@ -172,18 +193,19 @@ func config(verbose bool) (mainConfig, error) {
 	return cfg, nil
 }
 
+// mainConfig holds all runtime settings for the logistics command.
 type mainConfig struct {
-	instance                  string
-	login                     string
-	password                  string
-	verbose                   bool
-	autoAuth                  bool
-	salesChannel              logistics.SalesChannel
-	typeReport                logistics.TypeReport
-	startDate                 string // Если не заполнять поле то по умолчанию указывается текущая дата.
-	finishDAte                string // Если не заполнять поле то по умолчанию указывается текущая дата -4 день.
-	outDir                    string // Если не заполнять поле то по умолчанию указывается report.
-	waiteReportStatusDelaySec int    // Если не заполнять поле то по умолчанию указывается 10 sec.
-	waiteReportStatusAttempt  int    // Если не заполнять поле то по умолчанию указывается 10.
-	isArchive                 bool
+	instance                  string                 // X5 platform instance URL.
+	login                     string                 // Authentication login.
+	password                  string                 // Authentication password.
+	verbose                   bool                   // Enable verbose (debug) logging.
+	autoAuth                  bool                   // Automatically re-authenticate on token expiry.
+	salesChannel              logistics.SalesChannel // Sales channel filter for the report.
+	typeReport                logistics.TypeReport   // Type of logistics report to generate.
+	startDate                 string                 // Report window start date. If left empty, defaults to today (UTC).
+	finishDAte                string                 // Report window finish date. If left empty, defaults to 4 days ago (UTC).
+	outDir                    string                 // Directory for downloaded report files. Defaults to "reports".
+	waiteReportStatusDelaySec int                    // Seconds to wait between status polling attempts. Defaults to 10.
+	waiteReportStatusAttempt  int                    // Maximum number of status polling attempts. Defaults to 10.
+	isArchive                 bool                   // Request the report in archive (compressed) format.
 }

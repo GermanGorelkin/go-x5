@@ -8,27 +8,41 @@ import (
 	"go.uber.org/zap"
 )
 
+// ReportService handles communication with the report-related endpoints of the
+// X5 Insights API, including trends analysis creation, status polling, and
+// export file downloading.
 type ReportService service
 
+// ReportResult is a type constraint that enumerates the possible result payloads
+// returned by report-related API responses.
 type ReportResult interface {
 	ResultTrendsAnalysis | ResultReportStatus
 }
 
+// ReportResponse is a generic API envelope for report endpoints.
+// Code is "ok" on success; Result carries the typed payload.
 type ReportResponse[T ReportResult] struct {
 	Code   string `json:"code"`
 	Result T      `json:"result"`
 }
 
 // ----------------------------------------------------------------------------------------------
+
+// ProductSectionID identifies a single node in the product classifier tree.
+// Code is the node identifier and Level indicates its depth (e.g. "Ui4").
 type ProductSectionID struct {
 	Code  string `json:"code"`  // id from ResultTreeProducts
 	Level string `json:"level"` // level from ResultTreeProducts
 }
 
+// ProductSection wraps a ProductSectionID for inclusion in the report request body.
 type ProductSection struct {
 	ID ProductSectionID `json:"id"`
 }
 
+// Products describes the product selection block of a report request.
+// Selection lists the chosen product tree nodes; IsCategoryPluDetailing
+// enables PLU-level detail within each category.
 type Products struct {
 	Selection              []ProductSection `json:"selection"`
 	IsCategoryPluDetailing bool             `json:"isCategoryPluDetailing"` // false
@@ -37,6 +51,10 @@ type Products struct {
 //----------------------------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------------------------
+
+// Region represents a single region inside a federal district for the store
+// network element list. SelectedFully indicates whether all stores in the
+// region are included; CitiesID optionally restricts to specific cities.
 type Region struct {
 	RegionID      string   `json:"regionId"`
 	RegionName    string   `json:"regionName"`
@@ -44,6 +62,9 @@ type Region struct {
 	CitiesID      []string `json:"citiesId,omitempty"`
 }
 
+// FederalDistrict groups regions under a federal district inside a trade
+// network element list. SelectedFully indicates whether all stores in the
+// district are included.
 type FederalDistrict struct {
 	DistrictID    int      `json:"districtId"`
 	DistrictName  string   `json:"districtName"`
@@ -51,6 +72,8 @@ type FederalDistrict struct {
 	Regions       []Region `json:"regions"`
 }
 
+// NetworkElementlist describes a single trade network and its geographic
+// breakdown used for shop selection in a report request.
 type NetworkElementlist struct {
 	TradeNetworkID   string            `json:"tradeNetworkId"` // ID from ResultTreeTradeNetworks
 	TradeNetworkName string            `json:"tradeNetworkName"`
@@ -58,35 +81,47 @@ type NetworkElementlist struct {
 	FederalDistricts []FederalDistrict `json:"federalDistricts"`
 }
 
+// Delivery specifies the delivery export strategy for a report request.
+// DeliveryMode is one of "EXCLUDE", "INCLUDE_ALL", or "CHOOSE_ONLY_DELIVERY".
+// Types lists the selected delivery type IDs (from ResultDeliveryTypes).
 type Delivery struct {
 	DeliveryMode string   `json:"deliveryMode"` // EXCLUDE|CHOOSE_ONLY_DELIVERY
 	Types        []string `json:"types"`        // DeliveryTypeID from ResultDeliveryTypes
 }
 
+// SelectedShops aggregates the shop/network selection parameters for a report
+// request, including grouping dimensions, growth measure, network elements,
+// and delivery configuration.
 type SelectedShops struct {
 	GroupingAttributes []string             `json:"groupingAttributes"` // TRADE_NETWORK,CITY
 	GrowthMeasure      string               `json:"growthMeasure"`      // TOTAL
 	NetworkElementlist []NetworkElementlist `json:"networkElementList"`
-	/*
-		deliveryMode - будем делать неск выгрузок, одна с параметром EXCLUDE, вторая с параметром CHOOSE_ONLY_DELIVERY
-		types - если EXCLUDE, то оставляем пустым, если CHOOSE_ONLY_DELIVERY, то перечисляем все доставки, которые получим в запросе get_delivery
-	*/
+	// deliveryMode controls export strategy: EXCLUDE omits delivery,
+	// CHOOSE_ONLY_DELIVERY includes only delivery types from get_delivery;
+	// types is empty for EXCLUDE, lists all delivery IDs for CHOOSE_ONLY_DELIVERY.
 	Delivery Delivery `json:"delivery"`
 }
 
 //----------------------------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------------------------
+
+// Customer specifies the customer segmentation for a report.
+// CustomerType is typically "TOTAL" to include all customer types.
 type Customer struct {
 	CustomerType string `json:"customerType"` // TOTAL
 }
 
+// Periods describes the time-period configuration for a report, including the
+// chosen granularity (e.g. week/month) and the date range.
 type Periods struct {
 	PeriodGranularityId   string `json:"periodGranularityId"` // id from ResultPeriodGranularity
 	PeriodGranularityName string `json:"periodGranularityName"`
 	Period                Period `json:"period"`
 }
 
+// Period defines a date range with inclusive Start and Stop dates
+// formatted as "YYYY-MM-DD".
 type Period struct {
 	Start string `json:"start"`
 	Stop  string `json:"stop"`
@@ -94,7 +129,8 @@ type Period struct {
 
 //----------------------------------------------------------------------------------------------
 
-// RequestTrendsAnalysis - request body for TrendsAnalysis
+// RequestTrendsAnalysis is the request body sent to the trends analysis
+// report creation endpoint.
 type RequestTrendsAnalysis struct {
 	Name       string   `json:"name"`       // unique name
 	Type       string   `json:"type"`       // REPORT_TYPE_ID
@@ -109,21 +145,31 @@ type RequestTrendsAnalysis struct {
 	Export bool `json:"export"` // true
 }
 
+// PeriodMode selects the time granularity used when building a trends
+// analysis request.
 type PeriodMode int
 
 const (
+	// PeriodMode_Month selects monthly granularity.
 	PeriodMode_Month PeriodMode = iota + 1
+	// PeriodMode_Week selects weekly granularity.
 	PeriodMode_Week
 )
 
+// DeliveryMode controls how delivery types are handled in the report export.
 type DeliveryMode int
 
 const (
+	// DeliveryMode_EXCLUDE omits delivery data from the report.
 	DeliveryMode_EXCLUDE DeliveryMode = iota + 1
+	// DeliveryMode_CHOOSE_ONLY_DELIVERY includes only selected delivery types.
 	DeliveryMode_CHOOSE_ONLY_DELIVERY
+	// DeliveryMode_INCLUDE_ALL includes all delivery types in the report.
 	DeliveryMode_INCLUDE_ALL
 )
 
+// TrendsAnalysisOptions bundles every option needed by BuildRequestTrendsAnalysis
+// to construct a complete RequestTrendsAnalysis payload.
 type TrendsAnalysisOptions struct {
 	Params             ReportParameters
 	PeriodMode         PeriodMode
@@ -136,6 +182,10 @@ type TrendsAnalysisOptions struct {
 	ReportType string // TRENDS_ANALYSIS_DATA|TRENDS_ANALYSIS_WD|TRENDS_ANALYSIS_REGION
 }
 
+// BuildRequestTrendsAnalysis assembles a full RequestTrendsAnalysis from the
+// given TrendsAnalysisOptions. It resolves product nodes, network elements,
+// delivery mode, grouping attributes, period granularity, and date clamping
+// against the pre-fetched ReportParameters.
 func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions) (RequestTrendsAnalysis, error) {
 	var reqReport RequestTrendsAnalysis
 	log := srv.client.loggerFor("reports").With(
@@ -145,10 +195,13 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	)
 	log.Debug("building trends analysis request")
 
+	// Generate a unique report name from the options (type, period, delivery, dates).
 	reqReport.Name = uniqueReportName(opts)
 	reqReport.Type = REPORT_TYPE_ID
 	reqReport.SectionIDs = opts.Params.SectionIDs()
 
+	// Product selection: iterate over all product IDs from the parameters and
+	// wrap each one in a ProductSection for the request payload.
 	for _, id := range opts.Params.ProductIDs() {
 		reqReport.Parameters.Products.Selection = append(reqReport.Parameters.Products.Selection, ProductSection{
 			ID: id,
@@ -156,6 +209,8 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	}
 	reqReport.Parameters.Products.IsCategoryPluDetailing = true
 
+	// Network element list: use the explicitly provided list, or fall back to
+	// selecting all trade networks with SelectedFully=true.
 	networks := opts.NetworkElementlist
 	if len(networks) == 0 {
 		for _, id := range opts.Params.TradeNetworkIDs() {
@@ -168,6 +223,9 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 		}
 	}
 
+	// Delivery mode mapping: EXCLUDE omits delivery data (empty types),
+	// INCLUDE_ALL keeps all delivery data (empty types),
+	// CHOOSE_ONLY_DELIVERY enumerates every delivery ID from the parameters.
 	var delivery Delivery
 	if opts.DeliveryMode == DeliveryMode_EXCLUDE {
 		delivery = Delivery{
@@ -186,6 +244,8 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 		}
 	}
 
+	// Grouping attributes: use explicitly provided list or default to
+	// TOTAL, TRADE_NETWORK, and CITY dimensions.
 	var groupingAttributes []string
 	if len(opts.GroupingAttributes) > 0 {
 		groupingAttributes = append(groupingAttributes, opts.GroupingAttributes...)
@@ -204,18 +264,22 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 		CustomerType: "TOTAL",
 	}
 
+	// Period/granularity selection: resolve the granularity name to its UUID
+	// via the fetched parameters dictionary.
 	var (
 		granularityId   string
 		granularityName string
 	)
 	if opts.PeriodMode == PeriodMode_Month {
-		// "При выборе гранулярности 'Месяц' продолжительность периода должна быть больше или равна 28 дням"
+		// When selecting "Month" granularity, the period duration must be >= 28 days.
 		granularityName = "Месяц"
 	} else if opts.PeriodMode == PeriodMode_Week {
 		granularityName = "Неделя"
 	}
 	granularityId = opts.Params.GranularityID(granularityName)
 
+	// Date clamping: ensure the requested end date does not exceed the maximum
+	// date available in the system.
 	_, maxDR, err := opts.Params.AvailableDates()
 	if err != nil {
 		log.Error("failed to parse available dates", zap.Error(err))
@@ -250,6 +314,9 @@ func (srv *ReportService) BuildRequestTrendsAnalysis(opts TrendsAnalysisOptions)
 	return reqReport, nil
 }
 
+// uniqueReportName builds a deterministic, human-readable report name by
+// combining the report type, period mode, delivery mode, date range, and a
+// nanosecond timestamp to guarantee uniqueness.
 func uniqueReportName(opts TrendsAnalysisOptions) string {
 	var deliveryMode string
 	if opts.DeliveryMode == DeliveryMode_EXCLUDE {
@@ -273,7 +340,9 @@ func uniqueReportName(opts TrendsAnalysisOptions) string {
 	return fmt.Sprintf("%s-%s-%s-%s-%s-%d", opts.ReportType, periodMode, deliveryMode, beginDate, endDate, time.Now().UnixNano())
 }
 
-// ResultTrendsAnalysis - response body for TrendsAnalysis
+// ResultTrendsAnalysis holds the API response after successfully creating a
+// trends analysis report. It contains the report's server-assigned ID,
+// type metadata, and audit fields.
 type ResultTrendsAnalysis struct {
 	ID             string `json:"id"`
 	ReportTypeID   string `json:"reportTypeId"`
@@ -286,7 +355,9 @@ type ResultTrendsAnalysis struct {
 	ParametersID   string `json:"parametersId"`
 }
 
-// CreateTrends creates trends analysis
+// CreateTrends sends a RequestTrendsAnalysis to the API and returns the
+// created report metadata. The caller should subsequently poll GetReportStatus
+// until the export file is ready for download.
 func (srv *ReportService) CreateTrends(request RequestTrendsAnalysis) (ResultTrendsAnalysis, error) {
 	log := srv.client.loggerFor("reports").With(
 		zap.String("request_name", request.Name),
@@ -306,15 +377,17 @@ func (srv *ReportService) CreateTrends(request RequestTrendsAnalysis) (ResultTre
 
 // ----------------------------------------------------------------------------------------------
 
-/*
-CREATED- Создан, готовится к генерации
-FAILED - Ошибка
-ENQUEUED - В очереди
-PROCESSING - Формируется
-EXPORT_FILE_GENERATION_STARTED - Начата генерация файла для выгрузки
-EXPORT_FILE_GENERATED - Выгрузка готова к скачиванию
-*/
+// Report status lifecycle:
+//   CREATED                          - Created, preparing for generation
+//   FAILED                           - Error
+//   ENQUEUED                         - Queued
+//   PROCESSING                       - Being generated
+//   EXPORT_FILE_GENERATION_STARTED   - Export file generation started
+//   EXPORT_FILE_GENERATED            - Export ready for download
 
+// ResultReportStatus holds the current state of a previously created report,
+// including its lifecycle status and the export file ID once generation is
+// complete.
 type ResultReportStatus struct {
 	ID           string `json:"id"`
 	Type         string `json:"type"`
@@ -328,6 +401,10 @@ type ResultReportStatus struct {
 	ExportFileID string `json:"exportFileId"`
 }
 
+// GetReportStatus polls the report status endpoint for the given reportID and
+// returns the current ResultReportStatus. The caller should check the Status
+// field (e.g. "EXPORT_FILE_GENERATED") to decide whether to proceed with
+// downloading.
 func (srv *ReportService) GetReportStatus(reportID string) (ResultReportStatus, error) {
 	log := srv.client.loggerFor("reports").With(zap.String("report_id", reportID))
 	url := fmt.Sprintf(URL_REPORT_STATUS, srv.client.API_URL, reportID)
@@ -347,6 +424,9 @@ func (srv *ReportService) GetReportStatus(reportID string) (ResultReportStatus, 
 
 // ----------------------------------------------------------------------------------------------
 
+// Download streams the generated export file identified by exportFileID into
+// the provided io.Writer. It should be called only after GetReportStatus
+// returns Status "EXPORT_FILE_GENERATED".
 func (srv *ReportService) Download(exportFileID string, w io.Writer) error {
 	log := srv.client.loggerFor("reports").With(zap.String("export_file_id", exportFileID))
 	log.Info("downloading report export")

@@ -8,15 +8,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// REPORT_TYPE_ID is the hardcoded UUID that identifies the TrendsAnalysis report type
+// across all parameter and report API calls.
 const (
 	REPORT_TYPE_ID = "8ddb5b9f-2193-453c-96ba-a0a3c14e517c" //
 )
 
+// ParametersService handles fetching report configuration parameters (sections, dates, stores, products, etc.).
 type ParametersService service
 
+// ParametersResult is a type constraint listing every concrete result type that can appear
+// inside a generic ParametersResponse.
 type ParametersResult interface {
 	ResultSections | ResultAvailableDates | ResultTreeStores | ResultTreeProducts | ResultDelivery | ResultMetrics | ResultGranularities
 }
+
+// ParametersResponse is a generic JSON envelope returned by every parameters endpoint.
+// Code is "ok" on success; Result carries the typed payload.
 type ParametersResponse[T ParametersResult] struct {
 	Code   string `json:"code"`
 	Result T      `json:"result"`
@@ -24,6 +32,9 @@ type ParametersResponse[T ParametersResult] struct {
 
 // ----------------------------------------------------------------------------------------------
 
+// ReportParameters aggregates all dictionary data needed to build a report request.
+// It embeds individual result types fetched from separate API endpoints so that
+// helper methods can derive IDs, dates, and trees from a single value.
 type ReportParameters struct {
 	ResultSections
 	ResultAvailableDates
@@ -34,6 +45,7 @@ type ReportParameters struct {
 	ResultGranularities
 }
 
+// SectionIDs returns the IDs of report sections that belong to the TrendsAnalysis report type.
 func (rp ReportParameters) SectionIDs() []string {
 	var ids []string
 	for _, section := range rp.Reportsections {
@@ -44,6 +56,8 @@ func (rp ReportParameters) SectionIDs() []string {
 	return ids
 }
 
+// AvailableDates parses the min/max date strings from the API into time.Time values.
+// These boundaries define the allowed date range for report period selection.
 func (rp ReportParameters) AvailableDates() (minDT time.Time, maxDT time.Time, err error) {
 	minDT, err = time.Parse("2006-01-02", rp.MinDT)
 	if err != nil {
@@ -57,6 +71,7 @@ func (rp ReportParameters) AvailableDates() (minDT time.Time, maxDT time.Time, e
 	return minDT, maxDT, nil
 }
 
+// TradeNetworkIDs extracts the unique trade-network identifiers from the store classifier tree.
 func (rp ReportParameters) TradeNetworkIDs() []string {
 	var ids []string
 	for _, network := range rp.ResultTreeStores.TradeNetworks {
@@ -65,6 +80,9 @@ func (rp ReportParameters) TradeNetworkIDs() []string {
 	return ids
 }
 
+// FederalDistricts flattens the store classifier tree into a slice of FederalDistrict values,
+// one per (district, region) pair, suitable for inclusion in a report request.
+// Duplicate (districtID, regionID) pairs are deduplicated.
 func (rp ReportParameters) FederalDistricts() []FederalDistrict {
 	var federals []FederalDistrict
 
@@ -84,7 +102,7 @@ func (rp ReportParameters) FederalDistricts() []FederalDistrict {
 					Regions:       []Region{r},
 				}
 
-				// ищем дубли
+				// check for duplicates
 				found := false
 				for i := range federals {
 					if federals[i].DistrictID == f.DistrictID && federals[i].Regions[0].RegionID == r.RegionID {
@@ -136,7 +154,7 @@ func (rp ReportParameters) FederalDistrictsWithCities() []FederalDistrict {
 					// 	Regions:       []Region{r},
 					// }
 
-					// // ищем дубли
+					// // check for duplicates
 					// found := false
 					// for i := range federals {
 					// 	if federals[i].DistrictID == f.DistrictID && federals[i].Regions[0].RegionID == r.RegionID {
@@ -159,7 +177,8 @@ func (rp ReportParameters) FederalDistrictsWithCities() []FederalDistrict {
 }
 */
 
-// ProductIDs gets ids of products 4 lvl
+// ProductIDs collects product identifiers at the 4th (deepest) level of the product tree.
+// These correspond to the most granular product categories (level "Ui4").
 func (rp ReportParameters) ProductIDs() []ProductSectionID {
 	var ids []ProductSectionID
 	for _, node1 := range rp.ResultTreeProducts.Nodes {
@@ -174,7 +193,8 @@ func (rp ReportParameters) ProductIDs() []ProductSectionID {
 	return ids
 }
 
-// ProductIDs gets ids of products all lvl
+// GetAllProductIDs collects product identifiers from every level of the product tree,
+// not just the leaf nodes. This is useful for full-catalog exports.
 func (rp ReportParameters) GetAllProductIDs() []ProductSectionID {
 	var ids []ProductSectionID
 	for _, node := range rp.ResultTreeProducts.Nodes {
@@ -184,6 +204,7 @@ func (rp ReportParameters) GetAllProductIDs() []ProductSectionID {
 	return ids
 }
 
+// getProductIDs recursively walks the children of a TreeProductNodes and collects their IDs.
 func getProductIDs(nodes TreeProductNodes) []ProductSectionID {
 	var ids []ProductSectionID
 	for _, node := range nodes.Children {
@@ -195,6 +216,7 @@ func getProductIDs(nodes TreeProductNodes) []ProductSectionID {
 	return ids
 }
 
+// DeliveryIDs extracts all delivery-type identifiers from the delivery dictionary.
 func (rp ReportParameters) DeliveryIDs() []string {
 	var ids []string
 	for _, delivery := range rp.ResultDelivery.Types {
@@ -203,6 +225,7 @@ func (rp ReportParameters) DeliveryIDs() []string {
 	return ids
 }
 
+// MetricIDs extracts all metric-group codes from the metrics dictionary.
 func (rp ReportParameters) MetricIDs() []string {
 	var ids []string
 	for _, metric := range rp.ResultMetrics.MetricGroups {
@@ -211,6 +234,8 @@ func (rp ReportParameters) MetricIDs() []string {
 	return ids
 }
 
+// GranularityID looks up a period granularity by its display name (e.g. "Месяц", "Неделя")
+// and returns the corresponding API identifier. Returns an empty string if not found.
 func (rp ReportParameters) GranularityID(name string) string {
 	for _, granularity := range rp.ResultGranularities.Granularities {
 		if granularity.Name == name {
@@ -222,6 +247,9 @@ func (rp ReportParameters) GranularityID(name string) string {
 
 //-----------------
 
+// FetchReportParameters calls every parameter endpoint in sequence and returns
+// a fully populated ReportParameters value containing sections, dates, store/product trees,
+// delivery types, metrics, and granularities.
 func (srv *ParametersService) FetchReportParameters() (ReportParameters, error) {
 	var parameters ReportParameters
 	log := srv.client.loggerFor("parameters")
@@ -288,9 +316,9 @@ func (srv *ParametersService) FetchReportParameters() (ReportParameters, error) 
 }
 
 //----------------------------------------------------------------------------------------------
-// Список блоков для отчета
+// Report section list
 
-// ResultSections
+// ResultSections holds the list of report sections returned by the build-sections endpoint.
 type ResultSections struct {
 	Reportsections []struct {
 		ID           string `json:"id"`
@@ -315,9 +343,9 @@ func (srv *ParametersService) GetSections() (ResultSections, error) {
 }
 
 //----------------------------------------------------------------------------------------------
-// Доступные даты для построения отчета
+// Available dates for report building
 
-// ResultAvailableDates
+// ResultAvailableDates holds the minimum and maximum dates that can be used for report periods.
 type ResultAvailableDates struct {
 	MinDT string `json:"minDt"`
 	MaxDT string `json:"maxDt"`
@@ -342,9 +370,10 @@ func (srv *ParametersService) GetAvailableDates() (ResultAvailableDates, error) 
 }
 
 //----------------------------------------------------------------------------------------------
-// Дерево-классификатор магазинов
+// Store classifier tree
 
-// ResultTreeStores
+// ResultTreeStores represents the hierarchical store classifier returned by the tree/stores endpoint.
+// The tree is organised as TradeNetworks → FederalDistricts → Regions → Cities.
 type ResultTreeStores struct {
 	TotalStores   int `json:"totalStores"`
 	TradeNetworks []struct {
@@ -388,8 +417,11 @@ func (srv *ParametersService) GetTreeStores() (ResultTreeStores, error) {
 }
 
 //----------------------------------------------------------------------------------------------
-// Дерево-классификатор товаров
+// Product classifier tree
 
+// TreeProductNodes is a recursive node in the product classification tree.
+// Each node has an ID, a human-readable Name, a Level indicator (e.g. "Ui1"…"Ui4"),
+// and zero or more Children.
 type TreeProductNodes struct {
 	ID       string             `json:"id"`
 	Name     string             `json:"name"`
@@ -397,7 +429,7 @@ type TreeProductNodes struct {
 	Children []TreeProductNodes `json:"children"`
 }
 
-// ResultTreeProducts
+// ResultTreeProducts holds the root nodes of the product classifier tree.
 type ResultTreeProducts struct {
 	Nodes []TreeProductNodes `json:"nodes"`
 }
@@ -417,9 +449,9 @@ func (srv *ParametersService) GetTreeProducts() (ResultTreeProducts, error) {
 	return res.Result, nil
 }
 
-// Список доставок
+// Delivery types list
 
-// ResultDelivery
+// ResultDelivery holds the available delivery types returned by the delivery dictionary endpoint.
 type ResultDelivery struct {
 	Types []struct {
 		DeliveryTypeID   string `json:"deliveryTypeId"`
@@ -444,9 +476,10 @@ func (srv *ParametersService) GetDelivery() (ResultDelivery, error) {
 	return res.Result, nil
 }
 
-// Список метрик
+// Metrics list
 
-// ResultMetrics
+// ResultMetrics holds the available metric groups returned by the metrics endpoint.
+// Each group contains a Code identifier and a list of individual Metrics.
 type ResultMetrics struct {
 	MetricGroups []struct {
 		Code    string   `json:"code"`
@@ -471,7 +504,8 @@ func (srv *ParametersService) GetMetrics() (ResultMetrics, error) {
 
 // Granularities
 
-// ResultGranularities
+// ResultGranularities holds the available period granularities (e.g. week, month)
+// returned by the periods dictionary endpoint.
 type ResultGranularities struct {
 	Granularities []struct {
 		ID   string `json:"id"`
@@ -496,16 +530,21 @@ func (srv *ParametersService) GetGranularities() (ResultGranularities, error) {
 
 // Products
 
+// RequestProductsDownload is the request body sent to the products/download endpoint
+// to export a subset of the product tree as a file.
 type RequestProductsDownload struct {
 	Nodes         []RequestProductsDownloadNode `json:"nodes"`
 	GlobalCatalog bool                          `json:"global_catalog"`
 }
 
+// RequestProductsDownloadNode identifies a single product tree node to include in the export.
 type RequestProductsDownloadNode struct {
 	ID    string `json:"id"`
 	Level string `json:"level"`
 }
 
+// ConvertToRequestProductsDownloadNode converts a slice of ProductSectionID values
+// (used internally for report building) into the download-specific node format.
 func ConvertToRequestProductsDownloadNode(src []ProductSectionID) []RequestProductsDownloadNode {
 	result := make([]RequestProductsDownloadNode, len(src))
 	for i := range src {
@@ -517,6 +556,8 @@ func ConvertToRequestProductsDownloadNode(src []ProductSectionID) []RequestProdu
 	return result
 }
 
+// ProductsDownload sends a POST request to export selected product tree nodes
+// and streams the resulting file into w.
 func (srv *ParametersService) ProductsDownload(rpd RequestProductsDownload, w io.Writer) error {
 	log := srv.client.loggerFor("parameters").With(zap.Int("nodes", len(rpd.Nodes)))
 	log.Info("downloading products export")

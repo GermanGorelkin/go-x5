@@ -1,3 +1,5 @@
+// Package xconfig provides helpers for reading typed values from environment
+// variables with sensible defaults.
 package xconfig
 
 import (

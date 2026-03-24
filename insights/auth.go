@@ -10,16 +10,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type (
-	AccessToken  string
-	RefreshToken string
-	JWTToken     string
-)
+// AccessToken represents a KeyCloak access token used for Bearer authentication.
+type AccessToken string
 
-// AuthService handles communication with the auth related KeyCloak and internal token
+// RefreshToken represents a KeyCloak refresh token used to obtain new access tokens.
+type RefreshToken string
+
+// JWTToken represents an internal JWT token issued by the X5 Insights API (x5-api-key header).
+type JWTToken string
+
+// AuthService handles communication with the KeyCloak OAuth2 endpoint and
+// the internal X5 Insights token endpoint to obtain authorization credentials.
 type AuthService service
 
-// ResponseKeyCloakTokens is a response from KeyCloak
+// ResponseKeyCloakTokens holds the full OAuth2 token response returned by KeyCloak,
+// including access/refresh tokens, expiry times, and session metadata.
 type ResponseKeyCloakTokens struct {
 	AccessToken      AccessToken  `json:"access_token"`
 	ExpiresIn        int          `json:"expires_in"`
@@ -31,7 +36,8 @@ type ResponseKeyCloakTokens struct {
 	Scope            string       `json:"scope"`
 }
 
-// ResponseInternalToken is a response from API Token
+// ResponseInternalToken holds the response from the X5 Insights internal auth endpoint.
+// The nested Result.Token field contains the JWT used as the x5-api-key header value.
 type ResponseInternalToken struct {
 	Code   string `json:"code"`
 	Result struct {
@@ -39,7 +45,9 @@ type ResponseInternalToken struct {
 	} `json:"result"`
 }
 
-// GetKeyCloakTokens returns access and refresh tokens
+// GetKeyCloakTokens performs a Resource Owner Password Credentials grant against the
+// KeyCloak realm configured on the client. It sends client_id, username, and password
+// as form-encoded data and returns the resulting access and refresh tokens.
 func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (AccessToken, RefreshToken, error) {
 	log := srv.client.loggerFor("auth").With(zap.String("client_id", clientID))
 	data := url.Values{}
@@ -70,7 +78,9 @@ func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (
 	return res.AccessToken, res.RefreshToken, nil
 }
 
-// GetInternalToken returns internal token
+// GetInternalToken exchanges a KeyCloak access token for an internal X5 Insights JWT.
+// It sets the Bearer authorization header from the provided access token, calls the
+// internal /auth/token endpoint, and returns the JWT that must be sent as x5-api-key.
 func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToken) (JWTToken, error) {
 	log := srv.client.loggerFor("auth")
 	// cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
