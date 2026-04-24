@@ -16,7 +16,7 @@ type AccessToken string
 // RefreshToken represents a KeyCloak refresh token used to obtain new access tokens.
 type RefreshToken string
 
-// JWTToken represents an internal JWT token issued by the X5 Insights API (x5-api-key header).
+// JWTToken represents an internal JWT token issued by the X5 Insights API.
 type JWTToken string
 
 // AuthService handles communication with the KeyCloak OAuth2 endpoint and
@@ -37,7 +37,6 @@ type ResponseKeyCloakTokens struct {
 }
 
 // ResponseInternalToken holds the response from the X5 Insights internal auth endpoint.
-// The nested Result.Token field contains the JWT used as the x5-api-key header value.
 type ResponseInternalToken struct {
 	Code   string `json:"code"`
 	Result struct {
@@ -111,11 +110,9 @@ func (srv *AuthService) requestKeyCloakTokens(clientID, grantType string, data u
 
 // GetInternalToken exchanges a KeyCloak access token for an internal X5 Insights JWT.
 // It sets the Bearer authorization header from the provided access token, calls the
-// internal /auth/token endpoint, and returns the JWT that must be sent as x5-api-key.
+// internal /auth/token endpoint
 func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToken) (JWTToken, error) {
 	log := srv.client.loggerFor("auth")
-	// cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
-	// srv.client.httpClient.SetHeader("cookie", cookie)
 	srv.client.httpClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", access))
 
 	url := fmt.Sprintf(URL_INTERNAL_TOKEN, srv.client.API_URL)
