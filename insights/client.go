@@ -4,7 +4,9 @@
 package insights
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -159,8 +161,6 @@ func NewClient(cfg ClintConf) (*Client, error) {
 // access is the KeyCloak access token, refresh is unused at header level but kept for symmetry,
 // and jwt is the internal X5 API key.
 func (c *Client) SetToken(access, refresh, jwt string) {
-	// cookie := fmt.Sprintf("kc-access=%s; kc-state=%s;", access, refresh)
-	// c.httpClient.SetHeader("cookie", cookie)
 	c.httpClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", access))
 	c.httpClient.SetHeader("x5-api-key", jwt)
 	c.logger.Debug("authorization headers updated")
@@ -184,7 +184,7 @@ func (c *Client) Authorization() error {
 
 	jwt := c.authCache.state.jwt
 	if jwt == "" {
-		jwt, err = c.Auth.GetInternalToken(access, refresh)
+		access, refresh, jwt, err = c.exchangeInternalToken(log, access, refresh)
 		if err != nil {
 			log.Error("failed to get internal token", zap.Error(err))
 			return fmt.Errorf("failed to get internal token:%w", err)
@@ -198,6 +198,30 @@ func (c *Client) Authorization() error {
 	log.Info("authorization flow completed")
 
 	return nil
+}
+
+func (c *Client) exchangeInternalToken(log *zap.Logger, access AccessToken, refresh RefreshToken) (AccessToken, RefreshToken, JWTToken, error) {
+	jwt, err := c.Auth.GetInternalToken(access, refresh)
+	if err == nil {
+		return access, refresh, jwt, nil
+	}
+	if !isAuthorizationFailure(err) {
+		return "", "", "", err
+	}
+
+	log.Warn("internal token exchange rejected keycloak access token, retrying with password grant", zap.Error(err))
+	res, fallbackErr := c.Auth.getKeyCloakTokensWithPassword(c.ClientID, c.Login, c.Password)
+	if fallbackErr != nil {
+		return "", "", "", fmt.Errorf("password grant fallback failed after internal token rejection: %w", fallbackErr)
+	}
+
+	c.storeKeyCloakTokens(res, time.Now())
+	jwt, err = c.Auth.GetInternalToken(res.AccessToken, res.RefreshToken)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to get internal token after password grant fallback: %w", err)
+	}
+
+	return res.AccessToken, res.RefreshToken, jwt, nil
 }
 
 func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToken, error) {
@@ -255,4 +279,14 @@ func tokenExpiryTime(now time.Time, expiresInSec int) time.Time {
 		return now
 	}
 	return now.Add(time.Duration(expiresInSec) * time.Second)
+}
+
+func isAuthorizationFailure(err error) bool {
+	var resErr *httpclient.ErrorResponse
+	if !errors.As(err, &resErr) || resErr.Response == nil {
+		return false
+	}
+
+	return resErr.Response.StatusCode == http.StatusUnauthorized ||
+		resErr.Response.StatusCode == http.StatusForbidden
 }
