@@ -63,8 +63,7 @@ type Client struct {
 	logger     *zap.Logger
 	common     service // Reuse a single struct instead of allocating one for each service on the heap.
 
-	authMu    sync.Mutex
-	authState authState
+	authCache *AuthCache
 }
 
 // service is the shared base struct embedded into every API sub-service
@@ -76,8 +75,21 @@ type service struct {
 type authState struct {
 	access           AccessToken
 	refresh          RefreshToken
+	jwt              JWTToken
 	accessExpiresAt  time.Time
 	refreshExpiresAt time.Time
+}
+
+// AuthCache stores authorization tokens that can be shared by several clients
+// using the same credentials.
+type AuthCache struct {
+	mu    sync.Mutex
+	state authState
+}
+
+// NewAuthCache creates an empty shared authorization token cache.
+func NewAuthCache() *AuthCache {
+	return &AuthCache{}
 }
 
 // ClintConf holds the configuration parameters required to construct a new Client.
@@ -87,6 +99,7 @@ type ClintConf struct {
 	ClientID, Login, Password string
 	API_URL                   string
 	Logger                    *zap.Logger
+	AuthCache                 *AuthCache
 }
 
 // NewClient builds a fully initialised Client from the supplied configuration.
@@ -104,6 +117,10 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	authCache := cfg.AuthCache
+	if authCache == nil {
+		authCache = NewAuthCache()
+	}
 
 	// Populate the core client fields from configuration.
 	c := &Client{
@@ -114,6 +131,7 @@ func NewClient(cfg ClintConf) (*Client, error) {
 		Login:      cfg.Login,
 		Password:   cfg.Password,
 		httpClient: cl,
+		authCache:  authCache,
 		logger: logger.Named("insights").With(
 			zap.String("api_url", cfg.API_URL),
 			zap.String("kc_realm", cfg.KC_RELM),
@@ -155,8 +173,8 @@ func (c *Client) Authorization() error {
 	log := c.loggerFor("auth")
 	log.Info("starting authorization flow")
 
-	c.authMu.Lock()
-	defer c.authMu.Unlock()
+	c.authCache.mu.Lock()
+	defer c.authCache.mu.Unlock()
 
 	access, refresh, err := c.ensureKeyCloakTokens(log)
 	if err != nil {
@@ -164,10 +182,16 @@ func (c *Client) Authorization() error {
 		return fmt.Errorf("failed to get keycloak tokens:%w", err)
 	}
 
-	jwt, err := c.Auth.GetInternalToken(access, refresh)
-	if err != nil {
-		log.Error("failed to get internal token", zap.Error(err))
-		return fmt.Errorf("failed to get internal token:%w", err)
+	jwt := c.authCache.state.jwt
+	if jwt == "" {
+		jwt, err = c.Auth.GetInternalToken(access, refresh)
+		if err != nil {
+			log.Error("failed to get internal token", zap.Error(err))
+			return fmt.Errorf("failed to get internal token:%w", err)
+		}
+		c.authCache.state.jwt = jwt
+	} else {
+		log.Debug("reusing cached internal token")
 	}
 
 	c.SetToken(string(access), string(refresh), string(jwt))
@@ -178,14 +202,14 @@ func (c *Client) Authorization() error {
 
 func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToken, error) {
 	now := time.Now()
-	if c.authState.hasValidAccess(now) {
+	if c.authCache.state.hasValidAccess(now) {
 		log.Debug("reusing cached keycloak access token")
-		return c.authState.access, c.authState.refresh, nil
+		return c.authCache.state.access, c.authCache.state.refresh, nil
 	}
 
-	if c.authState.canRefresh(now) {
+	if c.authCache.state.canRefresh(now) {
 		log.Info("refreshing keycloak tokens")
-		res, err := c.Auth.refreshKeyCloakTokens(c.ClientID, c.authState.refresh)
+		res, err := c.Auth.refreshKeyCloakTokens(c.ClientID, c.authCache.state.refresh)
 		if err == nil {
 			c.storeKeyCloakTokens(res, now)
 			return res.AccessToken, res.RefreshToken, nil
@@ -204,7 +228,7 @@ func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToke
 }
 
 func (c *Client) storeKeyCloakTokens(res ResponseKeyCloakTokens, now time.Time) {
-	c.authState = authState{
+	c.authCache.state = authState{
 		access:           res.AccessToken,
 		refresh:          res.RefreshToken,
 		accessExpiresAt:  tokenExpiryTime(now, res.ExpiresIn),

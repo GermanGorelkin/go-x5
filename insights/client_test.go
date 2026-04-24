@@ -125,7 +125,7 @@ func TestClient_Authorization_ReusesValidKeyCloakToken(t *testing.T) {
 
 	assert.Equal(t, 1, passwordGrantCalls)
 	assert.Equal(t, 0, refreshGrantCalls)
-	assert.Equal(t, 2, internalTokenCalls)
+	assert.Equal(t, 1, internalTokenCalls)
 }
 
 func TestClient_Authorization_RefreshesExpiredKeyCloakToken(t *testing.T) {
@@ -187,4 +187,52 @@ func TestClient_Authorization_RefreshesExpiredKeyCloakToken(t *testing.T) {
 	assert.Equal(t, 1, passwordGrantCalls)
 	assert.Equal(t, 1, refreshGrantCalls)
 	assert.Equal(t, 2, internalTokenCalls)
+}
+
+func TestClient_Authorization_ReusesSharedAuthCacheAcrossClients(t *testing.T) {
+	const realm = "test-realm"
+
+	var (
+		passwordGrantCalls int
+		internalTokenCalls int
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf("/auth/realms/%s/protocol/openid-connect/token", realm):
+			passwordGrantCalls++
+			_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+			require.NoError(t, err)
+		case "/api/v1/public/auth/token":
+			internalTokenCalls++
+			assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
+			_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-1"}}`)
+			require.NoError(t, err)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	authCache := NewAuthCache()
+	cfg := ClintConf{
+		KC_URL:    ts.URL,
+		KC_RELM:   realm,
+		ClientID:  "client-id",
+		Login:     "login",
+		Password:  "password",
+		API_URL:   ts.URL,
+		AuthCache: authCache,
+	}
+
+	clientA, err := NewClient(cfg)
+	require.NoError(t, err)
+	clientB, err := NewClient(cfg)
+	require.NoError(t, err)
+
+	require.NoError(t, clientA.Authorization())
+	require.NoError(t, clientB.Authorization())
+
+	assert.Equal(t, 1, passwordGrantCalls)
+	assert.Equal(t, 1, internalTokenCalls)
 }

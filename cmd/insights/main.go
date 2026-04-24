@@ -41,7 +41,8 @@ func main() {
 	logger.Info("command started")
 
 	// Step 2: Create the Insights API client and authenticate via Keycloak.
-	cl, err := newInsightsClient(cfg, logger)
+	authCache := insights.NewAuthCache()
+	cl, err := newInsightsClient(cfg, logger, authCache)
 	if err != nil {
 		logger.Fatal("failed to build insights client", zap.Error(err))
 	}
@@ -110,7 +111,7 @@ func main() {
 				zap.String("report_name", reqReport.Name),
 				zap.String("request_type", reqReport.Type),
 			)
-			jobClient, err := newInsightsClient(cfg, reportLog)
+			jobClient, err := newInsightsClient(cfg, reportLog, authCache)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to build report client for %s: %w", reqReport.Name, err)
 				return
@@ -395,15 +396,16 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 	return fmt.Errorf("failed to download report %s after retries: %w", reqReport.Name, downloadErr)
 }
 
-func newInsightsClient(cfg mainConfig, logger *zap.Logger) (*insights.Client, error) {
+func newInsightsClient(cfg mainConfig, logger *zap.Logger, authCache *insights.AuthCache) (*insights.Client, error) {
 	return insights.NewClient(insights.ClintConf{
-		KC_URL:   cfg.KC_URL,
-		KC_RELM:  cfg.KC_RELM,
-		API_URL:  cfg.API_URL,
-		ClientID: cfg.ClientID,
-		Login:    cfg.Login,
-		Password: cfg.Password,
-		Logger:   logger,
+		KC_URL:    cfg.KC_URL,
+		KC_RELM:   cfg.KC_RELM,
+		API_URL:   cfg.API_URL,
+		ClientID:  cfg.ClientID,
+		Login:     cfg.Login,
+		Password:  cfg.Password,
+		Logger:    logger,
+		AuthCache: authCache,
 	})
 }
 
