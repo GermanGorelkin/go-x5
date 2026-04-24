@@ -1,10 +1,16 @@
 package insights
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReportParameters_SectionIDs(t *testing.T) {
@@ -485,4 +491,64 @@ func TestConvertToRequestProductsDownloadNode_Empty(t *testing.T) {
 
 	assert.NotNil(t, result)
 	assert.Len(t, result, 0)
+}
+
+func TestParametersService_ProductsDownload_UsesAuthorizationHeaders(t *testing.T) {
+	const realm = "test-realm"
+
+	var internalTokenCalls int
+	var productsDownloadCalls int
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf("/auth/realms/%s/protocol/openid-connect/token", realm):
+			_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+			require.NoError(t, err)
+		case "/api/v1/public/auth/token":
+			internalTokenCalls++
+			assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
+			_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-1"}}`)
+			require.NoError(t, err)
+		case "/api/v1/public/tree/products/download":
+			productsDownloadCalls++
+			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
+			assert.Equal(t, "jwt-1", r.Header.Get("x5-api-key"))
+
+			var req RequestProductsDownload
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			assert.Equal(t, []RequestProductsDownloadNode{{ID: "prod-1", Level: "Ui4"}}, req.Nodes)
+			assert.False(t, req.GlobalCatalog)
+
+			_, err := fmt.Fprint(w, "xlsx-content")
+			require.NoError(t, err)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ClintConf{
+		KC_URL:   ts.URL,
+		KC_RELM:  realm,
+		ClientID: "client-id",
+		Login:    "login",
+		Password: "password",
+		API_URL:  ts.URL,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, client.Authorization())
+	require.NoError(t, client.Authorization())
+
+	var out bytes.Buffer
+	err = client.Parameters.ProductsDownload(RequestProductsDownload{
+		Nodes:         []RequestProductsDownloadNode{{ID: "prod-1", Level: "Ui4"}},
+		GlobalCatalog: false,
+	}, &out)
+	require.NoError(t, err)
+
+	assert.Equal(t, "xlsx-content", out.String())
+	assert.Equal(t, 1, internalTokenCalls)
+	assert.Equal(t, 1, productsDownloadCalls)
 }

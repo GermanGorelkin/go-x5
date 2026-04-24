@@ -81,6 +81,9 @@ func main() {
 		Nodes:         insights.ConvertToRequestProductsDownloadNode(allProducts),
 		GlobalCatalog: false,
 	}
+	if err := cl.Authorization(); err != nil {
+		logger.Fatal("authorization before products export failed", zap.Error(err))
+	}
 	if err := cl.Parameters.ProductsDownload(rpd, fp); err != nil {
 		logger.Fatal("failed to download products export", zap.Error(err))
 	}
