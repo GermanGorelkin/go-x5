@@ -72,3 +72,119 @@ func TestClient_Authorization_RedactsTokensInLogs(t *testing.T) {
 		}
 	}
 }
+
+func TestClient_Authorization_ReusesValidKeyCloakToken(t *testing.T) {
+	const realm = "test-realm"
+
+	var (
+		passwordGrantCalls int
+		refreshGrantCalls  int
+		internalTokenCalls int
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf("/auth/realms/%s/protocol/openid-connect/token", realm):
+			require.NoError(t, r.ParseForm())
+
+			switch r.PostFormValue("grant_type") {
+			case "password":
+				passwordGrantCalls++
+				_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+				require.NoError(t, err)
+			case "refresh_token":
+				refreshGrantCalls++
+				t.Fatal("did not expect refresh token grant while access token is still valid")
+			default:
+				t.Fatalf("unexpected grant type: %s", r.PostFormValue("grant_type"))
+			}
+		case "/api/v1/public/auth/token":
+			internalTokenCalls++
+			assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
+
+			_, err := fmt.Fprintf(w, `{"code":"ok","result":{"token":"jwt-%d"}}`, internalTokenCalls)
+			require.NoError(t, err)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ClintConf{
+		KC_URL:   ts.URL,
+		KC_RELM:  realm,
+		ClientID: "client-id",
+		Login:    "login",
+		Password: "password",
+		API_URL:  ts.URL,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, client.Authorization())
+	require.NoError(t, client.Authorization())
+
+	assert.Equal(t, 1, passwordGrantCalls)
+	assert.Equal(t, 0, refreshGrantCalls)
+	assert.Equal(t, 2, internalTokenCalls)
+}
+
+func TestClient_Authorization_RefreshesExpiredKeyCloakToken(t *testing.T) {
+	const realm = "test-realm"
+
+	var (
+		passwordGrantCalls int
+		refreshGrantCalls  int
+		internalTokenCalls int
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case fmt.Sprintf("/auth/realms/%s/protocol/openid-connect/token", realm):
+			require.NoError(t, r.ParseForm())
+
+			switch r.PostFormValue("grant_type") {
+			case "password":
+				passwordGrantCalls++
+				_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":0,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+				require.NoError(t, err)
+			case "refresh_token":
+				refreshGrantCalls++
+				assert.Equal(t, "refresh-1", r.PostFormValue("refresh_token"))
+				_, err := fmt.Fprint(w, `{"access_token":"access-2","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-2"}`)
+				require.NoError(t, err)
+			default:
+				t.Fatalf("unexpected grant type: %s", r.PostFormValue("grant_type"))
+			}
+		case "/api/v1/public/auth/token":
+			internalTokenCalls++
+			if internalTokenCalls == 1 {
+				assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
+			} else {
+				assert.Equal(t, "Bearer access-2", r.Header.Get("Authorization"))
+			}
+
+			_, err := fmt.Fprintf(w, `{"code":"ok","result":{"token":"jwt-%d"}}`, internalTokenCalls)
+			require.NoError(t, err)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ClintConf{
+		KC_URL:   ts.URL,
+		KC_RELM:  realm,
+		ClientID: "client-id",
+		Login:    "login",
+		Password: "password",
+		API_URL:  ts.URL,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, client.Authorization())
+	require.NoError(t, client.Authorization())
+
+	assert.Equal(t, 1, passwordGrantCalls)
+	assert.Equal(t, 1, refreshGrantCalls)
+	assert.Equal(t, 2, internalTokenCalls)
+}

@@ -5,6 +5,8 @@ package insights
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/germangorelkin/go-x5/internal/xlog"
 	httpclient "github.com/germangorelkin/http-client"
@@ -40,6 +42,8 @@ const (
 	URL_KC_TOKEN = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	// URL_INTERNAL_TOKEN exchanges a KeyCloak access token for an internal X5 API JWT.
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token" // {{api_url}}/api/v1/public/auth/token
+
+	keycloakExpirySkew = 30 * time.Second
 )
 
 // Client is the top-level API client for the X5 Insights service.
@@ -58,12 +62,22 @@ type Client struct {
 	httpClient *httpclient.Client
 	logger     *zap.Logger
 	common     service // Reuse a single struct instead of allocating one for each service on the heap.
+
+	authMu    sync.Mutex
+	authState authState
 }
 
 // service is the shared base struct embedded into every API sub-service
 // so they can access the parent Client without extra allocations.
 type service struct {
 	client *Client
+}
+
+type authState struct {
+	access           AccessToken
+	refresh          RefreshToken
+	accessExpiresAt  time.Time
+	refreshExpiresAt time.Time
 }
 
 // ClintConf holds the configuration parameters required to construct a new Client.
@@ -141,7 +155,10 @@ func (c *Client) Authorization() error {
 	log := c.loggerFor("auth")
 	log.Info("starting authorization flow")
 
-	access, refresh, err := c.Auth.GetKeyCloakTokens(c.ClientID, c.Login, c.Password)
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+
+	access, refresh, err := c.ensureKeyCloakTokens(log)
 	if err != nil {
 		log.Error("failed to get keycloak tokens", zap.Error(err))
 		return fmt.Errorf("failed to get keycloak tokens:%w", err)
@@ -157,4 +174,61 @@ func (c *Client) Authorization() error {
 	log.Info("authorization flow completed")
 
 	return nil
+}
+
+func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToken, error) {
+	now := time.Now()
+	if c.authState.hasValidAccess(now) {
+		log.Debug("reusing cached keycloak access token")
+		return c.authState.access, c.authState.refresh, nil
+	}
+
+	if c.authState.canRefresh(now) {
+		log.Info("refreshing keycloak tokens")
+		res, err := c.Auth.refreshKeyCloakTokens(c.ClientID, c.authState.refresh)
+		if err == nil {
+			c.storeKeyCloakTokens(res, now)
+			return res.AccessToken, res.RefreshToken, nil
+		}
+		log.Warn("failed to refresh keycloak tokens, falling back to password grant", zap.Error(err))
+	}
+
+	log.Info("requesting keycloak tokens with password grant")
+	res, err := c.Auth.getKeyCloakTokensWithPassword(c.ClientID, c.Login, c.Password)
+	if err != nil {
+		return "", "", err
+	}
+
+	c.storeKeyCloakTokens(res, now)
+	return res.AccessToken, res.RefreshToken, nil
+}
+
+func (c *Client) storeKeyCloakTokens(res ResponseKeyCloakTokens, now time.Time) {
+	c.authState = authState{
+		access:           res.AccessToken,
+		refresh:          res.RefreshToken,
+		accessExpiresAt:  tokenExpiryTime(now, res.ExpiresIn),
+		refreshExpiresAt: tokenExpiryTime(now, res.RefreshExpiresIn),
+	}
+}
+
+func (s authState) hasValidAccess(now time.Time) bool {
+	if s.access == "" || s.accessExpiresAt.IsZero() {
+		return false
+	}
+	return now.Before(s.accessExpiresAt.Add(-keycloakExpirySkew))
+}
+
+func (s authState) canRefresh(now time.Time) bool {
+	if s.refresh == "" || s.refreshExpiresAt.IsZero() {
+		return false
+	}
+	return now.Before(s.refreshExpiresAt.Add(-keycloakExpirySkew))
+}
+
+func tokenExpiryTime(now time.Time, expiresInSec int) time.Time {
+	if expiresInSec <= 0 {
+		return now
+	}
+	return now.Add(time.Duration(expiresInSec) * time.Second)
 }

@@ -49,33 +49,64 @@ type ResponseInternalToken struct {
 // KeyCloak realm configured on the client. It sends client_id, username, and password
 // as form-encoded data and returns the resulting access and refresh tokens.
 func (srv *AuthService) GetKeyCloakTokens(clientID, username, password string) (AccessToken, RefreshToken, error) {
-	log := srv.client.loggerFor("auth").With(zap.String("client_id", clientID))
+	res, err := srv.getKeyCloakTokensWithPassword(clientID, username, password)
+	if err != nil {
+		return "", "", err
+	}
+
+	return res.AccessToken, res.RefreshToken, nil
+}
+
+func (srv *AuthService) getKeyCloakTokensWithPassword(clientID, username, password string) (ResponseKeyCloakTokens, error) {
 	data := url.Values{}
 	data.Set("client_id", clientID)
 	data.Set("username", username)
 	data.Set("password", password)
 	data.Set("grant_type", "password")
+
+	return srv.requestKeyCloakTokens(clientID, "password", data)
+}
+
+func (srv *AuthService) refreshKeyCloakTokens(clientID string, refresh RefreshToken) (ResponseKeyCloakTokens, error) {
+	data := url.Values{}
+	data.Set("client_id", clientID)
+	data.Set("refresh_token", string(refresh))
+	data.Set("grant_type", "refresh_token")
+
+	return srv.requestKeyCloakTokens(clientID, "refresh_token", data)
+}
+
+func (srv *AuthService) requestKeyCloakTokens(clientID, grantType string, data url.Values) (ResponseKeyCloakTokens, error) {
+	log := srv.client.loggerFor("auth").With(
+		zap.String("client_id", clientID),
+		zap.String("grant_type", grantType),
+	)
 	encodedData := data.Encode()
 
-	url := fmt.Sprintf(URL_KC_TOKEN, srv.client.KC_URL, srv.client.KC_RELM)
+	tokenURL := fmt.Sprintf(URL_KC_TOKEN, srv.client.KC_URL, srv.client.KC_RELM)
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(encodedData))
+	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(encodedData))
 	if err != nil {
 		log.Error("failed to build keycloak request", zap.Error(err))
-		return "", "", fmt.Errorf("failed to build keycloak request: %w", err)
+		return ResponseKeyCloakTokens{}, fmt.Errorf("failed to build keycloak request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	var res ResponseKeyCloakTokens
 	log.Debug("requesting keycloak tokens")
 	_, err = srv.client.httpClient.Do(context.Background(), req, &res)
-	if err != nil || res.AccessToken == "" || res.RefreshToken == "" {
+	if err != nil {
 		log.Error("failed to get keycloak tokens", zap.Error(err))
-		return "", "", fmt.Errorf("failed to get keycloak tokens: %w", err)
+		return ResponseKeyCloakTokens{}, fmt.Errorf("failed to get keycloak tokens: %w", err)
+	}
+	if res.AccessToken == "" || res.RefreshToken == "" {
+		err := fmt.Errorf("empty access or refresh token in response")
+		log.Error("failed to get keycloak tokens", zap.Error(err))
+		return ResponseKeyCloakTokens{}, fmt.Errorf("failed to get keycloak tokens: %w", err)
 	}
 	log.Debug("keycloak tokens received")
 
-	return res.AccessToken, res.RefreshToken, nil
+	return res, nil
 }
 
 // GetInternalToken exchanges a KeyCloak access token for an internal X5 Insights JWT.
