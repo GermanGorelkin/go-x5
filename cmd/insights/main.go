@@ -20,6 +20,13 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	reportStatusMaxAttempts = 36
+	reportStatusDelay       = 5 * time.Minute
+	statusCheckMaxAttempts  = 3
+	statusCheckRetryDelay   = 5 * time.Minute
+)
+
 func main() {
 	// Step 1: Bootstrap structured logger and load configuration from env vars.
 	logger, verbose, err := xlog.Bootstrap("insights")
@@ -276,6 +283,7 @@ func buildRequests(
 //  1. Serialize and save the request JSON to disk for debugging/auditing.
 //  2. Submit the report creation request to the API.
 //  3. Poll the report status in a loop (up to 36 attempts × 5 min = 3 hours max).
+//     Each status check has a short internal retry for transient auth/API errors.
 //  4. On success, download the resulting ZIP file with retry (up to 5 attempts × 5 min).
 func runReport(logger *zap.Logger, cl *insights.Client, authMu *sync.Mutex, outDir string, reqReport insights.RequestTrendsAnalysis) error {
 	logger.Info("starting report job")
@@ -313,29 +321,24 @@ func runReport(logger *zap.Logger, cl *insights.Client, authMu *sync.Mutex, outD
 	// Poll the report status until it reaches a terminal state (SUCCEEDED or FAILED).
 	// Maximum wait time: 36 attempts × 5 min = 3 hours.
 	var status insights.ResultReportStatus
-	for attempt := 1; attempt <= 36; attempt++ {
-		if err := authorize(authMu, cl); err != nil {
-			return fmt.Errorf("failed to authorize before status check for %s: %w", reqReport.Name, err)
-		}
-
-		status, err = cl.Reports.GetReportStatus(res.ID)
+	for attempt := 1; attempt <= reportStatusMaxAttempts; attempt++ {
+		status, err = getReportStatusWithRetry(reportLog, authMu, cl, reqReport.Name, res.ID)
 		if err != nil {
-			return fmt.Errorf("failed to get report status for %s: %w", reqReport.Name, err)
+			return err
 		}
 
 		reportLog.Info("report status received",
 			zap.String("status", status.Status),
 			zap.Int("attempt", attempt),
-			zap.Int("max_attempts", 36),
+			zap.Int("max_attempts", reportStatusMaxAttempts),
 		)
 
 		if status.Status == "SUCCEEDED" || status.Status == "FAILED" {
 			break
 		}
 
-		delay := 5 * time.Minute
-		reportLog.Info("waiting before next status check", zap.Duration("delay", delay))
-		time.Sleep(delay)
+		reportLog.Info("waiting before next status check", zap.Duration("delay", reportStatusDelay))
+		time.Sleep(reportStatusDelay)
 	}
 
 	if status.Status == "FAILED" {
@@ -394,6 +397,48 @@ func runReport(logger *zap.Logger, cl *insights.Client, authMu *sync.Mutex, outD
 	}
 
 	return fmt.Errorf("failed to download report %s after retries: %w", reqReport.Name, downloadErr)
+}
+
+func getReportStatusWithRetry(
+	logger *zap.Logger,
+	authMu *sync.Mutex,
+	cl *insights.Client,
+	reportName string,
+	reportID string,
+) (insights.ResultReportStatus, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= statusCheckMaxAttempts; attempt++ {
+		if err := authorize(authMu, cl); err != nil {
+			lastErr = fmt.Errorf("failed to authorize before status check for %s: %w", reportName, err)
+		} else {
+			status, err := cl.Reports.GetReportStatus(reportID)
+			if err == nil {
+				if attempt > 1 {
+					logger.Info("report status check succeeded after retry",
+						zap.Int("retry_attempt", attempt),
+						zap.Int("max_retry_attempts", statusCheckMaxAttempts),
+					)
+				}
+				return status, nil
+			}
+			lastErr = fmt.Errorf("failed to get report status for %s: %w", reportName, err)
+		}
+
+		if attempt == statusCheckMaxAttempts {
+			break
+		}
+
+		logger.Warn("failed to check report status, will retry",
+			zap.Int("retry_attempt", attempt),
+			zap.Int("max_retry_attempts", statusCheckMaxAttempts),
+			zap.Duration("delay", statusCheckRetryDelay),
+			zap.Error(lastErr),
+		)
+		time.Sleep(statusCheckRetryDelay)
+	}
+
+	return insights.ResultReportStatus{}, fmt.Errorf("failed to check report status after retries: %w", lastErr)
 }
 
 func authorize(authMu *sync.Mutex, cl *insights.Client) error {
