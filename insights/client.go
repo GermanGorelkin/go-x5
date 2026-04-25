@@ -4,11 +4,7 @@
 package insights
 
 import (
-	"errors"
 	"fmt"
-	"net/http"
-	"sync"
-	"time"
 
 	"github.com/germangorelkin/go-x5/internal/xlog"
 	httpclient "github.com/germangorelkin/http-client"
@@ -44,8 +40,6 @@ const (
 	URL_KC_TOKEN = "%s/auth/realms/%s/protocol/openid-connect/token" // {{kc_url}}/auth/realms/{{kc_realm}}/protocol/openid-connect/token
 	// URL_INTERNAL_TOKEN exchanges a KeyCloak access token for an internal X5 API JWT.
 	URL_INTERNAL_TOKEN = "%s/api/v1/public/auth/token" // {{api_url}}/api/v1/public/auth/token
-
-	keycloakExpirySkew = 30 * time.Second
 )
 
 // Client is the top-level API client for the X5 Insights service.
@@ -64,33 +58,12 @@ type Client struct {
 	httpClient *httpclient.Client
 	logger     *zap.Logger
 	common     service // Reuse a single struct instead of allocating one for each service on the heap.
-
-	authCache *AuthCache
 }
 
 // service is the shared base struct embedded into every API sub-service
 // so they can access the parent Client without extra allocations.
 type service struct {
 	client *Client
-}
-
-type authState struct {
-	access          AccessToken
-	refresh         RefreshToken
-	jwt             JWTToken
-	accessExpiresAt time.Time
-}
-
-// AuthCache stores authorization tokens that can be shared by several clients
-// using the same credentials.
-type AuthCache struct {
-	mu    sync.Mutex
-	state authState
-}
-
-// NewAuthCache creates an empty shared authorization token cache.
-func NewAuthCache() *AuthCache {
-	return &AuthCache{}
 }
 
 // ClintConf holds the configuration parameters required to construct a new Client.
@@ -100,7 +73,6 @@ type ClintConf struct {
 	ClientID, Login, Password string
 	API_URL                   string
 	Logger                    *zap.Logger
-	AuthCache                 *AuthCache
 }
 
 // NewClient builds a fully initialised Client from the supplied configuration.
@@ -118,10 +90,6 @@ func NewClient(cfg ClintConf) (*Client, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	authCache := cfg.AuthCache
-	if authCache == nil {
-		authCache = NewAuthCache()
-	}
 
 	// Populate the core client fields from configuration.
 	c := &Client{
@@ -132,7 +100,6 @@ func NewClient(cfg ClintConf) (*Client, error) {
 		Login:      cfg.Login,
 		Password:   cfg.Password,
 		httpClient: cl,
-		authCache:  authCache,
 		logger: logger.Named("insights").With(
 			zap.String("api_url", cfg.API_URL),
 			zap.String("kc_realm", cfg.KC_RELM),
@@ -172,102 +139,20 @@ func (c *Client) Authorization() error {
 	log := c.loggerFor("auth")
 	log.Info("starting authorization flow")
 
-	c.authCache.mu.Lock()
-	defer c.authCache.mu.Unlock()
-
-	access, refresh, err := c.ensureKeyCloakTokens(log)
+	access, refresh, err := c.Auth.GetKeyCloakTokens(c.ClientID, c.Login, c.Password)
 	if err != nil {
 		log.Error("failed to get keycloak tokens", zap.Error(err))
 		return fmt.Errorf("failed to get keycloak tokens:%w", err)
 	}
 
-	jwt := c.authCache.state.jwt
-	if jwt == "" {
-		access, refresh, jwt, err = c.exchangeInternalToken(log, access, refresh)
-		if err != nil {
-			log.Error("failed to get internal token", zap.Error(err))
-			return fmt.Errorf("failed to get internal token:%w", err)
-		}
-		c.authCache.state.jwt = jwt
-	} else {
-		log.Debug("reusing cached internal token")
+	jwt, err := c.Auth.GetInternalToken(access, refresh)
+	if err != nil {
+		log.Error("failed to get internal token", zap.Error(err))
+		return fmt.Errorf("failed to get internal token:%w", err)
 	}
 
 	c.SetToken(string(access), string(refresh), string(jwt))
 	log.Info("authorization flow completed")
 
 	return nil
-}
-
-func (c *Client) exchangeInternalToken(log *zap.Logger, access AccessToken, refresh RefreshToken) (AccessToken, RefreshToken, JWTToken, error) {
-	jwt, err := c.Auth.GetInternalToken(access, refresh)
-	if err == nil {
-		return access, refresh, jwt, nil
-	}
-	if !isAuthorizationFailure(err) {
-		return "", "", "", err
-	}
-
-	log.Warn("internal token exchange rejected keycloak access token, retrying with password grant", zap.Error(err))
-	res, fallbackErr := c.Auth.getKeyCloakTokensWithPassword(c.ClientID, c.Login, c.Password)
-	if fallbackErr != nil {
-		return "", "", "", fmt.Errorf("password grant fallback failed after internal token rejection: %w", fallbackErr)
-	}
-
-	c.storeKeyCloakTokens(res, time.Now())
-	jwt, err = c.Auth.GetInternalToken(res.AccessToken, res.RefreshToken)
-	if err != nil {
-		return "", "", "", fmt.Errorf("failed to get internal token after password grant fallback: %w", err)
-	}
-
-	return res.AccessToken, res.RefreshToken, jwt, nil
-}
-
-func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToken, error) {
-	now := time.Now()
-	if c.authCache.state.hasValidAccess(now) {
-		log.Debug("reusing cached keycloak access token")
-		return c.authCache.state.access, c.authCache.state.refresh, nil
-	}
-
-	log.Info("requesting keycloak tokens with password grant")
-	res, err := c.Auth.getKeyCloakTokensWithPassword(c.ClientID, c.Login, c.Password)
-	if err != nil {
-		return "", "", err
-	}
-
-	c.storeKeyCloakTokens(res, now)
-	return res.AccessToken, res.RefreshToken, nil
-}
-
-func (c *Client) storeKeyCloakTokens(res ResponseKeyCloakTokens, now time.Time) {
-	c.authCache.state = authState{
-		access:          res.AccessToken,
-		refresh:         res.RefreshToken,
-		accessExpiresAt: tokenExpiryTime(now, res.ExpiresIn),
-	}
-}
-
-func (s authState) hasValidAccess(now time.Time) bool {
-	if s.access == "" || s.accessExpiresAt.IsZero() {
-		return false
-	}
-	return now.Before(s.accessExpiresAt.Add(-keycloakExpirySkew))
-}
-
-func tokenExpiryTime(now time.Time, expiresInSec int) time.Time {
-	if expiresInSec <= 0 {
-		return now
-	}
-	return now.Add(time.Duration(expiresInSec) * time.Second)
-}
-
-func isAuthorizationFailure(err error) bool {
-	var resErr *httpclient.ErrorResponse
-	if !errors.As(err, &resErr) || resErr.Response == nil {
-		return false
-	}
-
-	return resErr.Response.StatusCode == http.StatusUnauthorized ||
-		resErr.Response.StatusCode == http.StatusForbidden
 }

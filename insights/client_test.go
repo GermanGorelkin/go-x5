@@ -73,7 +73,7 @@ func TestClient_Authorization_RedactsTokensInLogs(t *testing.T) {
 	}
 }
 
-func TestClient_Authorization_ReusesValidKeyCloakToken(t *testing.T) {
+func TestClient_Authorization_RequestsPasswordGrantEachCall(t *testing.T) {
 	const realm = "test-realm"
 
 	var (
@@ -90,17 +90,17 @@ func TestClient_Authorization_ReusesValidKeyCloakToken(t *testing.T) {
 			switch r.PostFormValue("grant_type") {
 			case "password":
 				passwordGrantCalls++
-				_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+				_, err := fmt.Fprintf(w, `{"access_token":"access-%d","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-%d"}`, passwordGrantCalls, passwordGrantCalls)
 				require.NoError(t, err)
 			case "refresh_token":
 				refreshGrantCalls++
-				t.Fatal("did not expect refresh token grant while access token is still valid")
+				t.Fatal("did not expect refresh token grant")
 			default:
 				t.Fatalf("unexpected grant type: %s", r.PostFormValue("grant_type"))
 			}
 		case "/api/v1/public/auth/token":
 			internalTokenCalls++
-			assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
+			assert.Equal(t, fmt.Sprintf("Bearer access-%d", internalTokenCalls), r.Header.Get("Authorization"))
 
 			_, err := fmt.Fprintf(w, `{"code":"ok","result":{"token":"jwt-%d"}}`, internalTokenCalls)
 			require.NoError(t, err)
@@ -123,12 +123,12 @@ func TestClient_Authorization_ReusesValidKeyCloakToken(t *testing.T) {
 	require.NoError(t, client.Authorization())
 	require.NoError(t, client.Authorization())
 
-	assert.Equal(t, 1, passwordGrantCalls)
+	assert.Equal(t, 2, passwordGrantCalls)
 	assert.Equal(t, 0, refreshGrantCalls)
-	assert.Equal(t, 1, internalTokenCalls)
+	assert.Equal(t, 2, internalTokenCalls)
 }
 
-func TestClient_Authorization_RequestsPasswordGrantWhenCachedKeyCloakTokenExpires(t *testing.T) {
+func TestClient_Authorization_DoesNotUseRefreshTokenGrant(t *testing.T) {
 	const realm = "test-realm"
 
 	var (
@@ -187,7 +187,7 @@ func TestClient_Authorization_RequestsPasswordGrantWhenCachedKeyCloakTokenExpire
 	assert.Equal(t, 2, internalTokenCalls)
 }
 
-func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsAccess(t *testing.T) {
+func TestClient_Authorization_ReturnsInternalTokenRejectionWithoutFallback(t *testing.T) {
 	const realm = "test-realm"
 
 	var (
@@ -204,12 +204,7 @@ func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsAccess
 			switch r.PostFormValue("grant_type") {
 			case "password":
 				passwordGrantCalls++
-				if passwordGrantCalls == 1 {
-					_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
-					require.NoError(t, err)
-					return
-				}
-				_, err := fmt.Fprint(w, `{"access_token":"access-2","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-2"}`)
+				_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
 				require.NoError(t, err)
 			case "refresh_token":
 				refreshGrantCalls++
@@ -223,9 +218,6 @@ func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsAccess
 			case "Bearer access-1":
 				w.WriteHeader(http.StatusUnauthorized)
 				_, err := fmt.Fprint(w, `{"code":"access_forbidden","description":"auth failed"}`)
-				require.NoError(t, err)
-			case "Bearer access-2":
-				_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-2"}}`)
 				require.NoError(t, err)
 			default:
 				t.Fatalf("unexpected authorization header: %s", r.Header.Get("Authorization"))
@@ -246,17 +238,14 @@ func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsAccess
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, client.Authorization())
+	require.Error(t, client.Authorization())
 
-	assert.Equal(t, AccessToken("access-2"), client.authCache.state.access)
-	assert.Equal(t, RefreshToken("refresh-2"), client.authCache.state.refresh)
-	assert.Equal(t, JWTToken("jwt-2"), client.authCache.state.jwt)
-	assert.Equal(t, 2, passwordGrantCalls)
+	assert.Equal(t, 1, passwordGrantCalls)
 	assert.Equal(t, 0, refreshGrantCalls)
-	assert.Equal(t, 2, internalTokenCalls)
+	assert.Equal(t, 1, internalTokenCalls)
 }
 
-func TestClient_Authorization_ReusesSharedAuthCacheAcrossClients(t *testing.T) {
+func TestClient_Authorization_AuthorizesEachClientIndependently(t *testing.T) {
 	const realm = "test-realm"
 
 	var (
@@ -268,12 +257,12 @@ func TestClient_Authorization_ReusesSharedAuthCacheAcrossClients(t *testing.T) {
 		switch r.URL.Path {
 		case fmt.Sprintf("/auth/realms/%s/protocol/openid-connect/token", realm):
 			passwordGrantCalls++
-			_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+			_, err := fmt.Fprintf(w, `{"access_token":"access-%d","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-%d"}`, passwordGrantCalls, passwordGrantCalls)
 			require.NoError(t, err)
 		case "/api/v1/public/auth/token":
 			internalTokenCalls++
-			assert.Equal(t, "Bearer access-1", r.Header.Get("Authorization"))
-			_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-1"}}`)
+			assert.Equal(t, fmt.Sprintf("Bearer access-%d", internalTokenCalls), r.Header.Get("Authorization"))
+			_, err := fmt.Fprintf(w, `{"code":"ok","result":{"token":"jwt-%d"}}`, internalTokenCalls)
 			require.NoError(t, err)
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -281,15 +270,13 @@ func TestClient_Authorization_ReusesSharedAuthCacheAcrossClients(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	authCache := NewAuthCache()
 	cfg := ClintConf{
-		KC_URL:    ts.URL,
-		KC_RELM:   realm,
-		ClientID:  "client-id",
-		Login:     "login",
-		Password:  "password",
-		API_URL:   ts.URL,
-		AuthCache: authCache,
+		KC_URL:   ts.URL,
+		KC_RELM:  realm,
+		ClientID: "client-id",
+		Login:    "login",
+		Password: "password",
+		API_URL:  ts.URL,
 	}
 
 	clientA, err := NewClient(cfg)
@@ -300,6 +287,6 @@ func TestClient_Authorization_ReusesSharedAuthCacheAcrossClients(t *testing.T) {
 	require.NoError(t, clientA.Authorization())
 	require.NoError(t, clientB.Authorization())
 
-	assert.Equal(t, 1, passwordGrantCalls)
-	assert.Equal(t, 1, internalTokenCalls)
+	assert.Equal(t, 2, passwordGrantCalls)
+	assert.Equal(t, 2, internalTokenCalls)
 }

@@ -549,6 +549,6 @@ func TestParametersService_ProductsDownload_UsesAuthorizationHeaders(t *testing.
 	require.NoError(t, err)
 
 	assert.Equal(t, "xlsx-content", out.String())
-	assert.Equal(t, 1, internalTokenCalls)
+	assert.Equal(t, 2, internalTokenCalls)
 	assert.Equal(t, 1, productsDownloadCalls)
 }

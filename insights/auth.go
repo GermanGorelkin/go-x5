@@ -112,11 +112,7 @@ func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToke
 	log.Debug("requesting internal token")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil {
-		if isAuthorizationFailure(err) {
-			log.Warn("internal token exchange rejected access token", zap.Error(err), zap.String("code", res.Code))
-		} else {
-			log.Error("failed to get internal token", zap.Error(err), zap.String("code", res.Code))
-		}
+		log.Error("failed to get internal token", zap.Error(err), zap.String("code", res.Code))
 		return "", fmt.Errorf("failed to get internal token: %w", err)
 	}
 	if res.Result.Token == "" {

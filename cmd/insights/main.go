@@ -41,14 +41,14 @@ func main() {
 	logger.Info("command started")
 
 	// Step 2: Create the Insights API client and authenticate via Keycloak.
-	authCache := insights.NewAuthCache()
-	cl, err := newInsightsClient(cfg, logger, authCache)
+	authMu := &sync.Mutex{}
+	cl, err := newInsightsClient(cfg, logger)
 	if err != nil {
 		logger.Fatal("failed to build insights client", zap.Error(err))
 	}
 	logger.Info("client created")
 
-	if err := cl.Authorization(); err != nil {
+	if err := authorize(authMu, cl); err != nil {
 		logger.Fatal("authorization failed", zap.Error(err))
 	}
 
@@ -111,12 +111,12 @@ func main() {
 				zap.String("report_name", reqReport.Name),
 				zap.String("request_type", reqReport.Type),
 			)
-			jobClient, err := newInsightsClient(cfg, reportLog, authCache)
+			jobClient, err := newInsightsClient(cfg, reportLog)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to build report client for %s: %w", reqReport.Name, err)
 				return
 			}
-			if err := runReport(reportLog, jobClient, cfg.OutDir, reqReport); err != nil {
+			if err := runReport(reportLog, jobClient, authMu, cfg.OutDir, reqReport); err != nil {
 				errCh <- err
 			}
 		}(reqReport)
@@ -277,7 +277,7 @@ func buildRequests(
 //  2. Submit the report creation request to the API.
 //  3. Poll the report status in a loop (up to 36 attempts × 5 min = 3 hours max).
 //  4. On success, download the resulting ZIP file with retry (up to 5 attempts × 5 min).
-func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport insights.RequestTrendsAnalysis) error {
+func runReport(logger *zap.Logger, cl *insights.Client, authMu *sync.Mutex, outDir string, reqReport insights.RequestTrendsAnalysis) error {
 	logger.Info("starting report job")
 
 	// Save the request payload as JSON for later inspection.
@@ -299,7 +299,7 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 	)
 
 	// Re-authorize and submit the report creation request.
-	if err := cl.Authorization(); err != nil {
+	if err := authorize(authMu, cl); err != nil {
 		return fmt.Errorf("failed to authorize before create for %s: %w", reqReport.Name, err)
 	}
 	res, err := cl.Reports.CreateTrends(reqReport)
@@ -314,7 +314,7 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 	// Maximum wait time: 36 attempts × 5 min = 3 hours.
 	var status insights.ResultReportStatus
 	for attempt := 1; attempt <= 36; attempt++ {
-		if err := cl.Authorization(); err != nil {
+		if err := authorize(authMu, cl); err != nil {
 			return fmt.Errorf("failed to authorize before status check for %s: %w", reqReport.Name, err)
 		}
 
@@ -373,7 +373,7 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 			}
 		}
 
-		if err := cl.Authorization(); err != nil {
+		if err := authorize(authMu, cl); err != nil {
 			return fmt.Errorf("failed to authorize before download for %s: %w", reqReport.Name, err)
 		}
 		if err := cl.Reports.Download(status.ExportFileID, f); err == nil {
@@ -396,16 +396,22 @@ func runReport(logger *zap.Logger, cl *insights.Client, outDir string, reqReport
 	return fmt.Errorf("failed to download report %s after retries: %w", reqReport.Name, downloadErr)
 }
 
-func newInsightsClient(cfg mainConfig, logger *zap.Logger, authCache *insights.AuthCache) (*insights.Client, error) {
+func authorize(authMu *sync.Mutex, cl *insights.Client) error {
+	authMu.Lock()
+	defer authMu.Unlock()
+
+	return cl.Authorization()
+}
+
+func newInsightsClient(cfg mainConfig, logger *zap.Logger) (*insights.Client, error) {
 	return insights.NewClient(insights.ClintConf{
-		KC_URL:    cfg.KC_URL,
-		KC_RELM:   cfg.KC_RELM,
-		API_URL:   cfg.API_URL,
-		ClientID:  cfg.ClientID,
-		Login:     cfg.Login,
-		Password:  cfg.Password,
-		Logger:    logger,
-		AuthCache: authCache,
+		KC_URL:   cfg.KC_URL,
+		KC_RELM:  cfg.KC_RELM,
+		API_URL:  cfg.API_URL,
+		ClientID: cfg.ClientID,
+		Login:    cfg.Login,
+		Password: cfg.Password,
+		Logger:   logger,
 	})
 }
 
