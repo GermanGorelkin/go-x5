@@ -66,15 +66,6 @@ func (srv *AuthService) getKeyCloakTokensWithPassword(clientID, username, passwo
 	return srv.requestKeyCloakTokens(clientID, "password", data)
 }
 
-func (srv *AuthService) refreshKeyCloakTokens(clientID string, refresh RefreshToken) (ResponseKeyCloakTokens, error) {
-	data := url.Values{}
-	data.Set("client_id", clientID)
-	data.Set("refresh_token", string(refresh))
-	data.Set("grant_type", "refresh_token")
-
-	return srv.requestKeyCloakTokens(clientID, "refresh_token", data)
-}
-
 func (srv *AuthService) requestKeyCloakTokens(clientID, grantType string, data url.Values) (ResponseKeyCloakTokens, error) {
 	log := srv.client.loggerFor("auth").With(
 		zap.String("client_id", clientID),
@@ -121,7 +112,11 @@ func (srv *AuthService) GetInternalToken(access AccessToken, refresh RefreshToke
 	log.Debug("requesting internal token")
 	err := srv.client.httpClient.Get(url, &res)
 	if err != nil {
-		log.Error("failed to get internal token", zap.Error(err), zap.String("code", res.Code))
+		if isAuthorizationFailure(err) {
+			log.Warn("internal token exchange rejected access token", zap.Error(err), zap.String("code", res.Code))
+		} else {
+			log.Error("failed to get internal token", zap.Error(err), zap.String("code", res.Code))
+		}
 		return "", fmt.Errorf("failed to get internal token: %w", err)
 	}
 	if res.Result.Token == "" {

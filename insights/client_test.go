@@ -128,7 +128,7 @@ func TestClient_Authorization_ReusesValidKeyCloakToken(t *testing.T) {
 	assert.Equal(t, 1, internalTokenCalls)
 }
 
-func TestClient_Authorization_RefreshesExpiredKeyCloakToken(t *testing.T) {
+func TestClient_Authorization_RequestsPasswordGrantWhenCachedKeyCloakTokenExpires(t *testing.T) {
 	const realm = "test-realm"
 
 	var (
@@ -145,13 +145,11 @@ func TestClient_Authorization_RefreshesExpiredKeyCloakToken(t *testing.T) {
 			switch r.PostFormValue("grant_type") {
 			case "password":
 				passwordGrantCalls++
-				_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":0,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+				_, err := fmt.Fprintf(w, `{"access_token":"access-%d","expires_in":0,"refresh_expires_in":1800,"refresh_token":"refresh-%d"}`, passwordGrantCalls, passwordGrantCalls)
 				require.NoError(t, err)
 			case "refresh_token":
 				refreshGrantCalls++
-				assert.Equal(t, "refresh-1", r.PostFormValue("refresh_token"))
-				_, err := fmt.Fprint(w, `{"access_token":"access-2","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-2"}`)
-				require.NoError(t, err)
+				t.Fatal("did not expect refresh token grant when cached access token expires")
 			default:
 				t.Fatalf("unexpected grant type: %s", r.PostFormValue("grant_type"))
 			}
@@ -184,12 +182,12 @@ func TestClient_Authorization_RefreshesExpiredKeyCloakToken(t *testing.T) {
 	require.NoError(t, client.Authorization())
 	require.NoError(t, client.Authorization())
 
-	assert.Equal(t, 1, passwordGrantCalls)
-	assert.Equal(t, 1, refreshGrantCalls)
+	assert.Equal(t, 2, passwordGrantCalls)
+	assert.Equal(t, 0, refreshGrantCalls)
 	assert.Equal(t, 2, internalTokenCalls)
 }
 
-func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsRefreshedAccess(t *testing.T) {
+func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsAccess(t *testing.T) {
 	const realm = "test-realm"
 
 	var (
@@ -207,17 +205,15 @@ func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsRefres
 			case "password":
 				passwordGrantCalls++
 				if passwordGrantCalls == 1 {
-					_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":0,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
+					_, err := fmt.Fprint(w, `{"access_token":"access-1","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-1"}`)
 					require.NoError(t, err)
 					return
 				}
-				_, err := fmt.Fprint(w, `{"access_token":"access-3","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-3"}`)
+				_, err := fmt.Fprint(w, `{"access_token":"access-2","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-2"}`)
 				require.NoError(t, err)
 			case "refresh_token":
 				refreshGrantCalls++
-				assert.Equal(t, "refresh-1", r.PostFormValue("refresh_token"))
-				_, err := fmt.Fprint(w, `{"access_token":"access-2","expires_in":300,"refresh_expires_in":1800,"refresh_token":"refresh-2"}`)
-				require.NoError(t, err)
+				t.Fatal("did not expect refresh token grant")
 			default:
 				t.Fatalf("unexpected grant type: %s", r.PostFormValue("grant_type"))
 			}
@@ -225,14 +221,11 @@ func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsRefres
 			internalTokenCalls++
 			switch r.Header.Get("Authorization") {
 			case "Bearer access-1":
-				_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-1"}}`)
-				require.NoError(t, err)
-			case "Bearer access-2":
 				w.WriteHeader(http.StatusUnauthorized)
 				_, err := fmt.Fprint(w, `{"code":"access_forbidden","description":"auth failed"}`)
 				require.NoError(t, err)
-			case "Bearer access-3":
-				_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-3"}}`)
+			case "Bearer access-2":
+				_, err := fmt.Fprint(w, `{"code":"ok","result":{"token":"jwt-2"}}`)
 				require.NoError(t, err)
 			default:
 				t.Fatalf("unexpected authorization header: %s", r.Header.Get("Authorization"))
@@ -254,14 +247,13 @@ func TestClient_Authorization_RetriesPasswordGrantWhenInternalTokenRejectsRefres
 	require.NoError(t, err)
 
 	require.NoError(t, client.Authorization())
-	require.NoError(t, client.Authorization())
 
-	assert.Equal(t, AccessToken("access-3"), client.authCache.state.access)
-	assert.Equal(t, RefreshToken("refresh-3"), client.authCache.state.refresh)
-	assert.Equal(t, JWTToken("jwt-3"), client.authCache.state.jwt)
+	assert.Equal(t, AccessToken("access-2"), client.authCache.state.access)
+	assert.Equal(t, RefreshToken("refresh-2"), client.authCache.state.refresh)
+	assert.Equal(t, JWTToken("jwt-2"), client.authCache.state.jwt)
 	assert.Equal(t, 2, passwordGrantCalls)
-	assert.Equal(t, 1, refreshGrantCalls)
-	assert.Equal(t, 3, internalTokenCalls)
+	assert.Equal(t, 0, refreshGrantCalls)
+	assert.Equal(t, 2, internalTokenCalls)
 }
 
 func TestClient_Authorization_ReusesSharedAuthCacheAcrossClients(t *testing.T) {

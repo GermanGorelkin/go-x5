@@ -75,11 +75,10 @@ type service struct {
 }
 
 type authState struct {
-	access           AccessToken
-	refresh          RefreshToken
-	jwt              JWTToken
-	accessExpiresAt  time.Time
-	refreshExpiresAt time.Time
+	access          AccessToken
+	refresh         RefreshToken
+	jwt             JWTToken
+	accessExpiresAt time.Time
 }
 
 // AuthCache stores authorization tokens that can be shared by several clients
@@ -231,16 +230,6 @@ func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToke
 		return c.authCache.state.access, c.authCache.state.refresh, nil
 	}
 
-	if c.authCache.state.canRefresh(now) {
-		log.Info("refreshing keycloak tokens")
-		res, err := c.Auth.refreshKeyCloakTokens(c.ClientID, c.authCache.state.refresh)
-		if err == nil {
-			c.storeKeyCloakTokens(res, now)
-			return res.AccessToken, res.RefreshToken, nil
-		}
-		log.Warn("failed to refresh keycloak tokens, falling back to password grant", zap.Error(err))
-	}
-
 	log.Info("requesting keycloak tokens with password grant")
 	res, err := c.Auth.getKeyCloakTokensWithPassword(c.ClientID, c.Login, c.Password)
 	if err != nil {
@@ -253,10 +242,9 @@ func (c *Client) ensureKeyCloakTokens(log *zap.Logger) (AccessToken, RefreshToke
 
 func (c *Client) storeKeyCloakTokens(res ResponseKeyCloakTokens, now time.Time) {
 	c.authCache.state = authState{
-		access:           res.AccessToken,
-		refresh:          res.RefreshToken,
-		accessExpiresAt:  tokenExpiryTime(now, res.ExpiresIn),
-		refreshExpiresAt: tokenExpiryTime(now, res.RefreshExpiresIn),
+		access:          res.AccessToken,
+		refresh:         res.RefreshToken,
+		accessExpiresAt: tokenExpiryTime(now, res.ExpiresIn),
 	}
 }
 
@@ -265,13 +253,6 @@ func (s authState) hasValidAccess(now time.Time) bool {
 		return false
 	}
 	return now.Before(s.accessExpiresAt.Add(-keycloakExpirySkew))
-}
-
-func (s authState) canRefresh(now time.Time) bool {
-	if s.refresh == "" || s.refreshExpiresAt.IsZero() {
-		return false
-	}
-	return now.Before(s.refreshExpiresAt.Add(-keycloakExpirySkew))
 }
 
 func tokenExpiryTime(now time.Time, expiresInSec int) time.Time {
